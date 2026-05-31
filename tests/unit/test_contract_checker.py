@@ -1,6 +1,6 @@
 import unittest
 
-from app.server import ArtifactHarness, ContractChecker, OpenAICompatibleProvider
+from app.server import ArtifactHarness, ConflictScenarioHarness, ContractChecker, OpenAICompatibleProvider
 
 
 class ContractCheckerTest(unittest.TestCase):
@@ -65,6 +65,17 @@ fetch(apiUrl(`/api/schedule/check`), {
         files = provider.parse_files('{"files":{"api-contract.json":{"endpoints":[{"method":"GET","path":"/api/courses"}]}}}')
 
         self.assertEqual(files["api-contract.json"], '{\n  "endpoints": [\n    {\n      "method": "GET",\n      "path": "/api/courses"\n    }\n  ]\n}')
+
+    def test_conflict_scenario_harness_rewrites_frontend_only(self):
+        patched, changes = ConflictScenarioHarness().patch_frontend_files({
+            "frontend/src/app.js": 'fetch(apiUrl("/api/courses")); fetch(apiUrl("/api/schedules/check-conflicts"));',
+            "backend/server.py": '("GET", "/api/courses")',
+        })
+
+        self.assertIn("/api/course-list", patched["frontend/src/app.js"])
+        self.assertIn("/api/schedule/check", patched["frontend/src/app.js"])
+        self.assertIn("/api/courses", patched["backend/server.py"])
+        self.assertEqual(len(changes), 2)
 
 
 if __name__ == "__main__":

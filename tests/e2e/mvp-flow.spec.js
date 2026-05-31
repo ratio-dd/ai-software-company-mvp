@@ -94,7 +94,7 @@ test("Mock mode completes a BuildRun with review, conflict resolution, and ZIP e
 
   expect(detail.project.status).toBe("completed");
   expect(detail.active_build_run.status).toBe("completed");
-  expect(detail.artifacts.map((artifact) => artifact.type)).toEqual(expect.arrayContaining(["pm", "api_contract", "frontend", "backend", "qa"]));
+  expect(detail.artifacts.map((artifact) => artifact.type)).toEqual(expect.arrayContaining(["pm", "api_contract", "frontend", "backend", "runtime", "qa"]));
 
   await expect(page.getByRole("heading", { name: "Ready for export" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Download ZIP" })).toBeVisible();
@@ -197,7 +197,9 @@ test("config exposes minimal platform-owned toolset boundary", async ({ request 
     "read_context",
     "propose_files",
     "run_harness",
+    "run_conflict_scenario",
     "run_contract_check",
+    "run_runtime_harness",
     "export_artifacts",
   ]);
   expect(config.toolset.extension_points).toEqual(expect.arrayContaining([
@@ -231,4 +233,36 @@ test("artifact evidence exposes harness reports and manifest files", async ({ re
   expect(reportResponse.ok()).toBeTruthy();
   const report = await reportResponse.json();
   expect(JSON.parse(report.content).status).toMatch(/valid|repaired/);
+});
+
+test("force_api_conflict is injected by platform harness, not provider output", async ({ request }) => {
+  const projectResponse = await request.post("/api/projects", {
+    data: {
+      name: uniqueName("E2E Deterministic Conflict"),
+      requirement: "Create a scheduling MVP and let the platform inject the contract conflict.",
+      provider_mode: "mock",
+      force_api_conflict: true,
+      human_review_required: false
+    }
+  });
+  const project = await projectResponse.json();
+  const buildResponse = await request.post(`/api/projects/${project.project.id}/builds`, {
+    data: { provider_mode: "mock", force_api_conflict: true, human_review_required: false }
+  });
+  const detail = await buildResponse.json();
+  const conflict = openConflict(detail);
+  expect(conflict).toBeTruthy();
+
+  const frontendArtifacts = detail.artifacts.filter((artifact) => artifact.type === "frontend");
+  expect(frontendArtifacts.length).toBeGreaterThanOrEqual(2);
+  const injectedFrontend = frontendArtifacts[frontendArtifacts.length - 1];
+  const scenarioRun = detail.agent_runs.find((run) => run.id === injectedFrontend.agent_run_id);
+  expect(scenarioRun.trigger_reason).toBe("scenario_conflict_injection");
+  expect(scenarioRun.provider_mode).toBe("platform");
+
+  const reportResponse = await request.get(`/api/artifacts/${injectedFrontend.id}/file?path=${encodeURIComponent("_harness-report.json")}`);
+  expect(reportResponse.ok()).toBeTruthy();
+  const report = JSON.parse((await reportResponse.json()).content);
+  expect(report.repairs.some((repair) => repair.id === "scenario_api_conflict_injected")).toBeTruthy();
+  expect(conflict.mismatches.some((item) => item.kind === "frontend_usage_missing_backend_route")).toBeTruthy();
 });

@@ -14,6 +14,7 @@ const roleLabels = {
   architect: "Architect",
   frontend: "Frontend",
   backend: "Backend",
+  runtime: "Runtime",
   qa: "QA",
   api_contract: "Architect"
 };
@@ -54,10 +55,17 @@ const nodeDesigns = {
     output: "Conflict(open/resolved) 或进入 QA",
     gate: "Conflict 是业务状态，不是 failed；必须等待 Human CTO 决策。"
   },
+  runtime: {
+    title: "RuntimeHarness",
+    responsibility: "在 QA 前启动 generated frontend/backend，验证二者能按平台分配端口真正运行。",
+    input: "latest frontend/ + latest backend/ + route manifest",
+    output: "runtime_report.md + runtime_report.json",
+    gate: "进程启动或后端 route smoke 失败会阻塞 QA，并把原因写入 runtime artifact。"
+  },
   qa: {
     title: "QA Agent",
-    responsibility: "在冲突解决后生成 QA 报告，覆盖主流程、API 契约、冲突处理和风险结论。",
-    input: "latest valid/repaired artifacts + Conflict decision history",
+    responsibility: "在冲突解决且 runtime smoke 通过后生成 QA 报告，覆盖主流程、API 契约、冲突处理和风险结论。",
+    input: "latest valid/repaired artifacts + runtime_report + Conflict decision history",
     output: "qa_report.md",
     gate: "QA Harness 检查测试范围、测试用例、API 契约验证、冲突处理验证和风险结论。"
   }
@@ -152,7 +160,7 @@ function renderStatusStrip() {
     { label: "Project", value: project?.name || "none", tone: "default" },
     { label: "Run state", value: project?.status || "draft", tone: project?.status || "draft" },
     { label: "Next CTO action", value: nextAction, tone: nextAction.includes("Conflict") || nextAction.includes("Review") ? "attention" : "default" },
-    { label: "Runtime boundary", value: "logical agents / in-process", tone: "quiet" },
+    { label: "Runtime boundary", value: "logical agents + smoke", tone: "quiet" },
     { label: "Toolset", value: state.config?.toolset?.mode || "minimal", tone: "quiet" },
     { label: "Provider", value: provider, tone: "quiet" },
     { label: "LLM config", value: llmValue, tone: provider === "llm" && !state.config?.llm?.configured ? "attention" : "quiet" }
@@ -271,6 +279,7 @@ function renderPipeline() {
             </span>
             <span class="status-pill ${statusClass(contractStatus)}">${contractStatus}</span>
           </button>
+          ${card("runtime")}
           ${card("qa")}
         </div>
       </div>
@@ -303,7 +312,7 @@ function renderCommandSummary() {
     {
       label: "Tool boundary",
       value: "Minimal toolset",
-      note: "platform-owned harness/check/export"
+      note: "harness/check/runtime/export"
     }
   ];
   return `
@@ -359,7 +368,7 @@ function renderNodeDetail() {
       <div class="runtime-boundary">
         <div>
           <strong>Runtime</strong>
-          <span>v0.1 uses in-process logical AgentRuns; FE/BE run in parallel threads.</span>
+          <span>v0.1 uses in-process logical AgentRuns; FE/BE generation runs in parallel threads and generated apps get a pre-QA smoke run.</span>
         </div>
         <div>
           <strong>Isolation</strong>
@@ -367,7 +376,7 @@ function renderNodeDetail() {
         </div>
         <div>
           <strong>Tools</strong>
-          <span>Minimal platform-owned tools: read context, propose files, harness, contract check, export. No shell/browser/test-runner tools in v0.1.</span>
+          <span>Minimal platform-owned tools: read context, propose files, harness, deterministic conflict scenario, contract check, runtime smoke, export.</span>
         </div>
       </div>
       <div class="node-footer">
@@ -601,7 +610,7 @@ function renderDecision() {
     qs("#decisionArea").innerHTML = `
       <section class="state-card">
         <h3>Ready for export</h3>
-        <p>ZIP preflight passed. Download package includes prd.md, architecture.md, frontend/, backend/, qa_report.md.</p>
+        <p>ZIP preflight passed. Download package includes prd.md, architecture.md, frontend/, backend/, runtime_report, qa_report.md.</p>
         <div class="action-row">
           <a class="doc-link primary" href="/api/build-runs/${build.id}/export">Download ZIP</a>
           <button type="button" data-restore="evidence">查看 Evidence</button>

@@ -5,7 +5,11 @@ import json
 import os
 import re
 import shutil
+import socket
 import sqlite3
+import subprocess
+import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -83,6 +87,7 @@ MAX_RETRIES_BY_CATEGORY = {
     "generation_invalid": 1,
     "artifact_io": 1,
     "contract_parse_error": 1,
+    "runtime_validation": 0,
 }
 
 MINIMAL_AGENT_TOOLSET = [
@@ -105,16 +110,28 @@ MINIMAL_AGENT_TOOLSET = [
         "description": "Validate required files, repair deterministic structure, and extract manifests.",
     },
     {
+        "name": "run_conflict_scenario",
+        "owner": "platform",
+        "scope": "ConflictScenarioHarness",
+        "description": "When enabled, deterministically inject a FE/BE API mismatch after generation instead of relying on LLM behavior.",
+    },
+    {
         "name": "run_contract_check",
         "owner": "platform",
         "scope": "ContractChecker",
         "description": "Compare Frontend API usages with Backend routes and create Conflict when needed.",
     },
     {
+        "name": "run_runtime_harness",
+        "owner": "platform",
+        "scope": "RuntimeHarness",
+        "description": "Before QA, start generated frontend/backend on assigned ports and record runnable smoke evidence.",
+    },
+    {
         "name": "export_artifacts",
         "owner": "platform",
         "scope": "ZIP export",
-        "description": "Package the latest valid PM, architecture, frontend, backend, and QA artifacts.",
+        "description": "Package the latest valid PM, architecture, frontend, backend, runtime, and QA artifacts.",
     },
 ]
 
@@ -390,6 +407,17 @@ class ArtifactStore:
             raise FileNotFoundError(rel_path)
         return target.read_text(encoding="utf-8")
 
+    def read_bundle_files(self, artifact):
+        root = DATA_DIR / artifact["path"]
+        files = {}
+        if not root.exists():
+            return files
+        for file_path in sorted(root.rglob("*")):
+            if file_path.is_file():
+                rel_path = str(file_path.relative_to(root)).replace("\\", "/")
+                files[rel_path] = file_path.read_text(encoding="utf-8")
+        return files
+
 
 store = ArtifactStore()
 
@@ -477,10 +505,7 @@ generated frontend 和 backend 都应包含 README 与 run manifest，下载后�
                 "api-contract.json": json_dumps(api_contract),
             }
         if role == "frontend":
-            use_contract_paths = alignment_mode == "align_to_backend" or not build_run["force_api_conflict"]
-            courses_path = "/api/courses" if use_contract_paths else "/api/course-list"
-            conflict_path = "/api/schedules/check-conflicts" if use_contract_paths else "/api/schedule/check"
-            return self.frontend_bundle(name, courses_path, conflict_path)
+            return self.frontend_bundle(name, "/api/courses", "/api/schedules/check-conflicts")
         if role == "backend":
             use_frontend_paths = alignment_mode == "align_to_frontend"
             courses_path = "/api/course-list" if use_frontend_paths else "/api/courses"
@@ -513,7 +538,7 @@ generated frontend 和 backend 都应包含 README 与 run manifest，下载后�
 - 决策后保留原 attempt，并生成新的 resolution attempt。
 
 ## 风险与结论
-v0.1 适合展示工程题主线。真实 LLM 输出质量、AST 级 API diff、自动运行 generated app smoke test 可后续增强。
+v0.1 适合展示工程题主线。真实 LLM 输出质量、AST 级 API diff、浏览器级 generated app E2E 可后续增强。
 """
             }
         raise ValueError(f"unknown role: {role}")
@@ -777,6 +802,8 @@ Rules:
 - Include every required file for the role.
 - Use exactly the required relative paths unless the role-specific contract says otherwise.
 - Generated frontend and backend must be runnable with Python stdlib only.
+- Generated frontend/server.py and backend/server.py must accept `--port <number>` and bind the requested port.
+- Frontend must support a configurable backend base URL, preferably via `?api=http://127.0.0.1:8000` in the browser, so runtime smoke can start FE and BE on different ports.
 - Frontend must expose concrete API calls so the harness can extract usages.
 - Backend must expose concrete routes so the harness can extract routes.
 - Do not decide BuildRun state, Conflict state, or retry behavior; only return candidate files.
@@ -802,16 +829,21 @@ Each endpoint should include method, path, summary, request, and response.
 Use concrete API paths such as /api/courses and /api/schedules/check-conflicts."""
         if role == "frontend":
             return """Create frontend/README.md, frontend/server.py, frontend/index.html, and frontend/src/app.js.
+frontend/server.py must use argparse, accept --port, and serve frontend/ from the requested port.
+frontend/src/app.js must build API URLs from a configurable base, for example:
+const API_BASE_URL = new URLSearchParams(location.search).get("api") || "";
+function apiUrl(path) { return API_BASE_URL + path; }
 frontend/src/app.js must contain literal fetch("/api/...") or fetch(apiUrl("/api/...")) calls.
 Follow the API alignment policy for the exact paths.
 For POST request schema extraction, include a mapping like "/api/schedules/check-conflicts": ["courseId", "teacherId"] or "/api/schedule/check": ["courseId", "teacherId"] in JavaScript.
 For the canonical non-conflict path, include concrete calls equivalent to:
-fetch("/api/courses")
-fetch("/api/teachers")
-fetch("/api/schedules/check-conflicts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ courseId: "c1", teacherId: "t1" }) })"""
+fetch(apiUrl("/api/courses"))
+fetch(apiUrl("/api/teachers"))
+fetch(apiUrl("/api/schedules/check-conflicts"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ courseId: "c1", teacherId: "t1" }) })"""
         if role == "backend":
             return """Create backend/README.md and backend/server.py.
 backend/server.py must be runnable with Python stdlib only.
+backend/server.py must use argparse, accept --port, bind that exact port, and set permissive CORS headers for browser demos.
 Follow the API alignment policy for the exact paths.
 For route extraction, include literal tuples such as ("GET", "/api/courses") and ("POST", "/api/schedules/check-conflicts"), or the conflict-resolution paths when instructed.
 For POST request schema extraction, include a mapping like ("POST", "/api/schedules/check-conflicts"): ["courseId", "teacherId"] or ("POST", "/api/schedule/check"): ["courseId", "teacherId"] in Python."""
@@ -835,17 +867,17 @@ It must include these exact headings:
         if role == "frontend":
             if force_conflict and alignment_mode == "none":
                 return (
-                    "This is the intentional conflict scenario. Frontend must call "
-                    "GET /api/course-list and POST /api/schedule/check so ContractChecker can detect "
-                    "a frontend/backend API mismatch. Still include request keys courseId and teacherId "
-                    "for POST /api/schedule/check."
+                    f"{canonical} Frontend must call this canonical API set exactly. "
+                    "Do not intentionally create the mismatch yourself; the platform ConflictScenarioHarness "
+                    "will inject the deterministic mismatch when the scenario switch is enabled."
                 )
             return f"{canonical} Frontend must call this canonical API set exactly."
         if role == "backend":
             if force_conflict and alignment_mode == "align_to_frontend":
                 return (
-                    "Resolve the conflict by aligning Backend to the Frontend mismatch. Backend must expose "
-                    "GET /api/course-list and POST /api/schedule/check with request keys courseId and teacherId."
+                    "Resolve the conflict by aligning Backend to the exact Frontend mismatch paths listed in Conflict context. "
+                    "For the standard demo mismatch, expose GET /api/course-list and POST /api/schedule/check "
+                    "with request keys courseId and teacherId."
                 )
             return f"{canonical} Backend must expose this canonical API set exactly."
         return canonical
@@ -923,7 +955,7 @@ class ArtifactHarness:
             if not usages:
                 errors.append("frontend has no extractable fetch API usages")
             manifests["api_usages"] = usages
-            normalized.setdefault("frontend/manifest/api-usages.json", json_dumps({"usages": usages}))
+            normalized["frontend/manifest/api-usages.json"] = json_dumps({"usages": usages})
             normalized.setdefault("frontend/manifest/run.json", json_dumps({"command": "python3 server.py --port 5173"}))
         elif role == "backend":
             self.require_file(normalized, "backend/README.md", errors)
@@ -932,7 +964,7 @@ class ArtifactHarness:
             if not routes:
                 errors.append("backend has no extractable routes")
             manifests["routes"] = routes
-            normalized.setdefault("backend/manifest/routes.json", json_dumps({"routes": routes}))
+            normalized["backend/manifest/routes.json"] = json_dumps({"routes": routes})
             normalized.setdefault("backend/manifest/run.json", json_dumps({"command": "python3 server.py --port 8000"}))
         elif role == "qa":
             self.require_file(normalized, "qa_report.md", errors)
@@ -1112,12 +1144,338 @@ class ContractChecker:
         return mismatches
 
 
+class ConflictScenarioHarness:
+    PATH_REWRITES = [
+        ("/api/schedules/check-conflicts", "/api/schedule/check"),
+        ("/api/courses", "/api/course-list"),
+    ]
+
+    def run(self, project, frontend_artifact):
+        files = store.read_bundle_files(frontend_artifact)
+        patched, changes = self.patch_frontend_files(files)
+        if not changes:
+            usages = json_loads(frontend_artifact["manifest_json"], {}).get("api_usages", [])
+            first_usage = next((usage for usage in usages if usage.get("path", "").startswith("/")), None)
+            if first_usage:
+                original_path = first_usage["path"]
+                injected_path = f"{original_path.rstrip('/')}-scenario-conflict"
+                patched, changes = self.patch_specific_path(files, original_path, injected_path)
+        if not changes:
+            return None
+        result = harness.run("frontend", project, patched)
+        result["report"]["checks"].append({
+            "id": "scenario_conflict_injection",
+            "status": "passed" if result["status"] in ("valid", "repaired") else "failed",
+            "message": "Injected deterministic frontend API mismatch for the force_api_conflict scenario.",
+            "severity": "info",
+        })
+        result["report"]["repairs"].append({
+            "id": "scenario_api_conflict_injected",
+            "description": "Platform rewrote selected frontend API usages after generation; LLM output was not trusted to create the scenario.",
+            "files_changed": sorted({change["file"] for change in changes}),
+            "changes": changes,
+        })
+        result["report"]["scenario"] = {
+            "type": "forced_frontend_api_mismatch",
+            "source_artifact_id": frontend_artifact["id"],
+            "changes": changes,
+        }
+        return result
+
+    def patch_frontend_files(self, files):
+        patched = dict(files)
+        changes = []
+        for path, content in files.items():
+            if not path.startswith("frontend/") or path.startswith("frontend/manifest/"):
+                continue
+            if not path.endswith((".js", ".ts", ".tsx", ".html", ".md")):
+                continue
+            updated = content
+            for old_path, new_path in self.PATH_REWRITES:
+                count = updated.count(old_path)
+                if count:
+                    updated = updated.replace(old_path, new_path)
+                    changes.append({"file": path, "from": old_path, "to": new_path, "count": count})
+            patched[path] = updated
+        return patched, changes
+
+    def patch_specific_path(self, files, old_path, new_path):
+        patched = dict(files)
+        changes = []
+        for path, content in files.items():
+            if not path.startswith("frontend/") or path.startswith("frontend/manifest/"):
+                continue
+            if not path.endswith((".js", ".ts", ".tsx", ".html", ".md")):
+                continue
+            count = content.count(old_path)
+            if not count:
+                continue
+            patched[path] = content.replace(old_path, new_path)
+            changes.append({"file": path, "from": old_path, "to": new_path, "count": count})
+        return patched, changes
+
+
+class RuntimeHarness:
+    def run(self, frontend_artifact, backend_artifact):
+        backend_routes = json_loads(backend_artifact["manifest_json"], {}).get("routes", [])
+        frontend_usages = json_loads(frontend_artifact["manifest_json"], {}).get("api_usages", [])
+        checks = []
+        warnings = []
+        process_outputs = []
+        processes = []
+        backend_port = self.free_port()
+        frontend_port = self.free_port()
+
+        def add_check(check_id, status, message, owner=None, severity=None):
+            item = {
+                "id": check_id,
+                "status": status,
+                "message": message,
+                "severity": severity or ("error" if status == "failed" else "info"),
+            }
+            if owner:
+                item["owner"] = owner
+            checks.append(item)
+
+        with tempfile.TemporaryDirectory(prefix="ai-company-runtime-") as tmp:
+            tmp_root = Path(tmp)
+            backend_source = DATA_DIR / backend_artifact["path"] / "backend"
+            frontend_source = DATA_DIR / frontend_artifact["path"] / "frontend"
+            backend_dir = tmp_root / "backend"
+            frontend_dir = tmp_root / "frontend"
+
+            if not backend_source.exists():
+                add_check("backend_artifact_present", "failed", "backend/ directory is missing from the latest backend artifact.", "backend")
+            else:
+                shutil.copytree(backend_source, backend_dir)
+                add_check("backend_artifact_present", "passed", "backend/ directory copied to runtime sandbox.", "backend")
+
+            if not frontend_source.exists():
+                add_check("frontend_artifact_present", "failed", "frontend/ directory is missing from the latest frontend artifact.", "frontend")
+            else:
+                shutil.copytree(frontend_source, frontend_dir)
+                add_check("frontend_artifact_present", "passed", "frontend/ directory copied to runtime sandbox.", "frontend")
+
+            if self.failed(checks):
+                return self.result(False, checks, warnings, process_outputs, backend_port, frontend_port, frontend_usages, backend_routes)
+
+            backend_proc = self.start_process(backend_dir, backend_port, {"PORT": str(backend_port)})
+            processes.append(("backend", backend_proc))
+            if self.wait_port(backend_proc, backend_port):
+                add_check("backend_process_started", "passed", f"backend/server.py accepted --port and listened on {backend_port}.", "backend")
+                self.check_backend_routes(backend_routes, backend_port, add_check)
+            else:
+                add_check("backend_process_started", "failed", f"backend/server.py did not listen on requested port {backend_port}.", "backend")
+
+            frontend_proc = self.start_process(
+                frontend_dir,
+                frontend_port,
+                {
+                    "PORT": str(frontend_port),
+                    "BACKEND_URL": f"http://127.0.0.1:{backend_port}",
+                    "API_BASE_URL": f"http://127.0.0.1:{backend_port}",
+                },
+            )
+            processes.append(("frontend", frontend_proc))
+            if self.wait_port(frontend_proc, frontend_port):
+                add_check("frontend_process_started", "passed", f"frontend/server.py accepted --port and listened on {frontend_port}.", "frontend")
+                self.check_frontend_index(frontend_port, add_check)
+            else:
+                add_check("frontend_process_started", "failed", f"frontend/server.py did not listen on requested port {frontend_port}.", "frontend")
+
+            config_warning = self.frontend_backend_config_warning(frontend_artifact, frontend_usages)
+            if config_warning:
+                warnings.append(config_warning)
+
+            for name, proc in processes:
+                process_outputs.append(self.stop_process(name, proc))
+
+        passed = not self.failed(checks)
+        return self.result(passed, checks, warnings, process_outputs, backend_port, frontend_port, frontend_usages, backend_routes)
+
+    def start_process(self, cwd, port, extra_env):
+        env = os.environ.copy()
+        env.update(extra_env)
+        return subprocess.Popen(
+            [sys.executable, "server.py", "--port", str(port)],
+            cwd=str(cwd),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+    def wait_port(self, proc, port, timeout=5.0):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if proc.poll() is not None:
+                return False
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=0.25):
+                    return True
+            except OSError:
+                time.sleep(0.1)
+        return False
+
+    def check_backend_routes(self, routes, port, add_check):
+        seen = set()
+        for route in routes:
+            method = (route.get("method") or "GET").upper()
+            path = route.get("path") or ""
+            if not path.startswith("/") or (method, path) in seen:
+                continue
+            seen.add((method, path))
+            payload = {key: f"sample-{key}" for key in route.get("request_keys") or []}
+            if method == "POST" and not payload:
+                payload = {"courseId": "c1", "teacherId": "t1"}
+            status, body = self.http_request(method, f"http://127.0.0.1:{port}{path}", payload if method != "GET" else None)
+            check_id = f"backend_route_{method}_{path.strip('/').replace('/', '_') or 'root'}"
+            if status == 404:
+                add_check(check_id, "failed", f"{method} {path} returned 404.", "backend")
+            elif status >= 500:
+                add_check(check_id, "failed", f"{method} {path} returned {status}: {body[:160]}", "backend")
+            else:
+                add_check(check_id, "passed", f"{method} {path} responded with HTTP {status}.", "backend")
+
+    def check_frontend_index(self, port, add_check):
+        status, body = self.http_request("GET", f"http://127.0.0.1:{port}/")
+        if status == 404:
+            add_check("frontend_index", "failed", "GET / returned 404.", "frontend")
+        elif status >= 500:
+            add_check("frontend_index", "failed", f"GET / returned {status}: {body[:160]}", "frontend")
+        else:
+            add_check("frontend_index", "passed", f"GET / responded with HTTP {status}.", "frontend")
+
+    def frontend_backend_config_warning(self, frontend_artifact, frontend_usages):
+        if not frontend_usages:
+            return None
+        files = store.read_bundle_files(frontend_artifact)
+        frontend_text = "\n".join(
+            content for path, content in files.items()
+            if path.startswith("frontend/") and path.endswith((".js", ".ts", ".tsx", ".py", ".md"))
+        )
+        has_configurable_base = bool(re.search(r"API_BASE_URL|BACKEND_URL|URLSearchParams|apiUrl\s*\(", frontend_text))
+        if has_configurable_base:
+            return None
+        return {
+            "id": "frontend_backend_base_config",
+            "status": "warning",
+            "severity": "warning",
+            "owner": "frontend",
+            "message": "Frontend has API usages but no obvious configurable backend base URL. Demo may require manual code edits when FE/BE run on different ports.",
+        }
+
+    def http_request(self, method, url, payload=None):
+        data = None
+        headers = {}
+        if payload is not None:
+            data = json.dumps(payload).encode("utf-8")
+            headers["content-type"] = "application/json"
+        request = urllib.request.Request(url, data=data, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(request, timeout=2) as response:
+                return response.status, response.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as exc:
+            return exc.code, exc.read().decode("utf-8", errors="replace")
+        except Exception as exc:
+            return 599, str(exc)
+
+    def stop_process(self, name, proc):
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                stdout, stderr = proc.communicate(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                stdout, stderr = proc.communicate(timeout=2)
+        else:
+            stdout, stderr = proc.communicate(timeout=2)
+        return {
+            "name": name,
+            "exit_code": proc.returncode,
+            "stdout_tail": (stdout or "")[-1200:],
+            "stderr_tail": (stderr or "")[-1200:],
+        }
+
+    def free_port(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            return sock.getsockname()[1]
+
+    def failed(self, checks):
+        return any(check["status"] == "failed" for check in checks)
+
+    def result(self, passed, checks, warnings, process_outputs, backend_port, frontend_port, frontend_usages, backend_routes):
+        failed_checks = [check for check in checks if check["status"] == "failed"]
+        summary = {
+            "passed": passed,
+            "backend_port": backend_port,
+            "frontend_port": frontend_port,
+            "frontend_usages_checked_by_contract": len(frontend_usages),
+            "backend_routes_smoked": len(backend_routes),
+            "checks": checks,
+            "warnings": warnings,
+            "process_outputs": process_outputs,
+        }
+        report = {
+            "role": "runtime",
+            "status": "valid" if passed else "invalid_retryable",
+            "checks": checks,
+            "repairs": [],
+            "warnings": warnings,
+            "manifests": [{"type": "runtime", "item_count": len(checks)}],
+            "retry_recommendation": "none",
+            "failure_category": None if passed else "runtime_validation",
+        }
+        reason = "; ".join(f"{check['id']}: {check['message']}" for check in failed_checks)[:1200]
+        files = {
+            "runtime_report.json": json_dumps(summary),
+            "runtime_report.md": self.markdown_report(passed, checks, warnings, process_outputs, backend_port, frontend_port),
+        }
+        return {
+            "passed": passed,
+            "files": files,
+            "manifests": {"runtime": summary},
+            "report": report,
+            "errors": [reason] if reason else [],
+            "failure_reason": reason,
+        }
+
+    def markdown_report(self, passed, checks, warnings, process_outputs, backend_port, frontend_port):
+        lines = [
+            "# Runtime Harness Report",
+            "",
+            f"Status: {'PASSED' if passed else 'FAILED'}",
+            f"Backend requested port: {backend_port}",
+            f"Frontend requested port: {frontend_port}",
+            "",
+            "## Checks",
+        ]
+        for check in checks:
+            lines.append(f"- {check['status'].upper()} `{check['id']}`: {check['message']}")
+        if warnings:
+            lines.extend(["", "## Warnings"])
+            for warning in warnings:
+                lines.append(f"- WARNING `{warning['id']}`: {warning['message']}")
+        lines.extend(["", "## Process Output"])
+        for output in process_outputs:
+            lines.append(f"### {output['name']}")
+            lines.append(f"- exit_code: {output['exit_code']}")
+            if output["stderr_tail"]:
+                lines.append("```text")
+                lines.append(output["stderr_tail"])
+                lines.append("```")
+        return "\n".join(lines) + "\n"
+
+
 providers = {
     "mock": MockProvider(),
     "llm": OpenAICompatibleProvider(),
 }
 harness = ArtifactHarness()
 checker = ContractChecker()
+conflict_scenario_harness = ConflictScenarioHarness()
+runtime_harness = RuntimeHarness()
 
 
 class Orchestrator:
@@ -1221,6 +1579,9 @@ class Orchestrator:
         self.run_parallel_agents(build_id, ["frontend", "backend"])
         if self.build(build_id)["status"] == "failed":
             return
+        self.maybe_inject_conflict_scenario(build_id)
+        if self.build(build_id)["status"] == "failed":
+            return
         self.run_contract_check(build_id)
 
     def resolve_conflict(self, conflict_id, decision):
@@ -1298,6 +1659,25 @@ class Orchestrator:
 
     def run_qa_and_complete(self, build_id, conflict=None):
         build = self.build(build_id)
+        repo.update("build_runs", build_id, {"status": "running", "stage": "runtime_validation"})
+        frontend_artifact = self.latest_artifact(build_id, "frontend")
+        backend_artifact = self.latest_artifact(build_id, "backend")
+        runtime_result = runtime_harness.run(frontend_artifact, backend_artifact)
+        runtime_artifact = self.save_platform_artifact(
+            build_id,
+            role="runtime",
+            artifact_type="runtime",
+            result=runtime_result,
+            trigger_reason="runtime_validation",
+            input_artifact_ids=[frontend_artifact["id"], backend_artifact["id"]],
+            agent_status="completed" if runtime_result["passed"] else "failed",
+        )
+        if not runtime_artifact:
+            return
+        if not runtime_result["passed"]:
+            self.fail_build(build_id, "runtime_validation", runtime_result["failure_reason"] or "generated application runtime validation failed")
+            return
+        self.log(build["project_id"], build_id, None, "info", "runtime_harness_passed", "Generated frontend and backend passed runtime smoke checks.")
         repo.update("build_runs", build_id, {"status": "running", "stage": "qa"})
         self.run_agent(build_id, "qa", conflict=conflict)
         if self.build(build_id)["status"] == "failed":
@@ -1415,6 +1795,123 @@ class Orchestrator:
         repo.update("agent_runs", agent_id, {"status": "completed", "output_artifact_ids": json_dumps([artifact_id]), "completed_at": now_iso()})
         self.log(project["id"], build_id, agent_id, "info", "artifact_saved", f"{role} artifact saved with harness_status={result['status']}.")
         return repo.row("SELECT * FROM agent_runs WHERE id=?", (agent_id,))
+
+    def maybe_inject_conflict_scenario(self, build_id):
+        build = self.build(build_id)
+        if not build["force_api_conflict"]:
+            return
+        existing_conflicts = repo.row("SELECT COUNT(*) AS c FROM conflicts WHERE build_run_id=?", (build_id,))["c"]
+        if existing_conflicts:
+            return
+        project = repo.row("SELECT * FROM projects WHERE id=?", (build["project_id"],))
+        frontend_artifact = self.latest_artifact(build_id, "frontend")
+        backend_artifact = self.latest_artifact(build_id, "backend")
+        frontend_usages = json_loads(frontend_artifact["manifest_json"], {}).get("api_usages", [])
+        backend_routes = json_loads(backend_artifact["manifest_json"], {}).get("routes", [])
+        if checker.compare(frontend_usages, backend_routes):
+            self.log(build["project_id"], build_id, None, "info", "conflict_scenario_already_present", "force_api_conflict is enabled and generated artifacts already contain a detectable API mismatch.")
+            return
+
+        result = conflict_scenario_harness.run(project, frontend_artifact)
+        if not result:
+            self.fail_build(build_id, "generation_invalid", "force_api_conflict is enabled, but ConflictScenarioHarness could not rewrite any frontend API usage.")
+            return
+        if result["status"] not in ("valid", "repaired"):
+            reason = "; ".join(result.get("errors") or ["ConflictScenarioHarness produced an invalid frontend artifact."])
+            self.fail_build(build_id, result["report"].get("failure_category") or "generation_invalid", reason)
+            return
+
+        artifact = self.save_platform_artifact(
+            build_id,
+            role="frontend",
+            artifact_type="frontend",
+            result=result,
+            trigger_reason="scenario_conflict_injection",
+            input_artifact_ids=[frontend_artifact["id"], backend_artifact["id"]],
+            provider_mode="platform",
+        )
+        if not artifact:
+            return
+        changes = result["report"].get("scenario", {}).get("changes", [])
+        self.log(
+            build["project_id"],
+            build_id,
+            artifact["agent_run_id"] if artifact else None,
+            "info",
+            "conflict_scenario_injected",
+            f"ConflictScenarioHarness created frontend v{artifact['version']} with {len(changes)} deterministic API rewrite(s).",
+        )
+
+    def save_platform_artifact(
+        self,
+        build_id,
+        role,
+        artifact_type,
+        result,
+        trigger_reason,
+        input_artifact_ids=None,
+        provider_mode="platform",
+        agent_status="completed",
+    ):
+        build = self.build(build_id)
+        project = repo.row("SELECT * FROM projects WHERE id=?", (build["project_id"],))
+        attempt_no = 1 + repo.row("SELECT COUNT(*) AS c FROM agent_runs WHERE build_run_id=? AND role=?", (build_id, role))["c"]
+        agent_id = new_id("agent")
+        ts = now_iso()
+        repo.insert("agent_runs", {
+            "id": agent_id,
+            "build_run_id": build_id,
+            "role": role,
+            "status": "running",
+            "attempt_no": attempt_no,
+            "trigger_reason": trigger_reason,
+            "provider_mode": provider_mode,
+            "input_artifact_ids": json_dumps(input_artifact_ids or []),
+            "output_artifact_ids": "[]",
+            "alignment_mode": "none",
+            "failure_category": None if agent_status == "completed" else result["report"].get("failure_category"),
+            "retryable": 0,
+            "retry_of_agent_run_id": None,
+            "resolves_conflict_id": None,
+            "started_at": ts,
+            "completed_at": None,
+            "failed_reason": None,
+        })
+        version = 1 + repo.row("SELECT COUNT(*) AS c FROM artifacts WHERE build_run_id=? AND type=?", (build_id, artifact_type))["c"]
+        artifact_id = new_id("artifact")
+        try:
+            artifact_path = store.write_bundle(project["id"], build_id, agent_id, result["files"], result["manifests"], result["report"])
+        except OSError as exc:
+            repo.update("agent_runs", agent_id, {
+                "status": "failed",
+                "failure_category": "artifact_io",
+                "completed_at": now_iso(),
+                "failed_reason": f"failed to write platform artifact: {exc}",
+            })
+            self.fail_build(build_id, "artifact_io", f"failed to write platform artifact: {exc}")
+            return None
+        repo.insert("artifacts", {
+            "id": artifact_id,
+            "project_id": project["id"],
+            "build_run_id": build_id,
+            "agent_run_id": agent_id,
+            "type": artifact_type,
+            "path": artifact_path,
+            "content_preview": preview(result["files"]),
+            "version": version,
+            "manifest_json": json_dumps(result["manifests"]),
+            "harness_report_json": json_dumps(result["report"]),
+            "created_at": now_iso(),
+        })
+        repo.update("agent_runs", agent_id, {
+            "status": agent_status,
+            "output_artifact_ids": json_dumps([artifact_id]),
+            "completed_at": now_iso(),
+            "failure_category": None if agent_status == "completed" else result["report"].get("failure_category"),
+            "failed_reason": None if agent_status == "completed" else result.get("failure_reason"),
+        })
+        self.log(project["id"], build_id, agent_id, "info", "platform_artifact_saved", f"{artifact_type} platform artifact saved from {trigger_reason}.")
+        return repo.row("SELECT * FROM artifacts WHERE id=?", (artifact_id,))
 
     def run_parallel_agents(self, build_id, roles):
         threads = []
@@ -1620,7 +2117,7 @@ class Handler(BaseHTTPRequestHandler):
         latest = {}
         for artifact in artifacts:
             latest[artifact["type"]] = artifact
-        required = ["pm", "api_contract", "frontend", "backend", "qa"]
+        required = ["pm", "api_contract", "frontend", "backend", "runtime", "qa"]
         missing = [kind for kind in required if kind not in latest]
         if missing:
             raise BadRequest(f"missing artifacts for export: {', '.join(missing)}")

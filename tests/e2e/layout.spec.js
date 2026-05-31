@@ -173,7 +173,7 @@ for (const viewport of VIEWPORTS) {
     await page.locator(`[data-project-id="${projectId}"]`).click();
     await expect(page.locator("#statusStrip")).toContainText(projectName);
     await expect(page.getByRole("heading", { name: "Ready for export" })).toBeVisible();
-    await expect(page.locator(".flow-node")).toHaveCount(6);
+    await expect(page.locator(".flow-node")).toHaveCount(7);
 
     await page.locator('[data-node="frontend"]').click();
     await expect(page.locator(".node-detail")).toBeVisible();
