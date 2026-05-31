@@ -2,6 +2,8 @@
 
 Multi-agent collaboration platform for the engineering assignment. The default path is Mock mode, so it runs without any LLM key.
 
+中文说明见 [README.zh-CN.md](./README.zh-CN.md).
+
 ## Evaluation License Notice
 
 This repository is submitted for recruiting/interview evaluation only. It is not open source and is not licensed for commercial use, product use, internal tooling reuse, redistribution, model training, or derivative development outside the evaluation process.
