@@ -1,0 +1,2245 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Software Company Web UI Prototype Switcher</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --panel-2: #fbfcfd;
+      --line: #d9dee7;
+      --line-strong: #aeb7c6;
+      --text: #1d2430;
+      --muted: #667085;
+      --faint: #98a2b3;
+      --blue: #2563eb;
+      --blue-soft: #eaf1ff;
+      --green: #138a52;
+      --green-soft: #e8f6ef;
+      --amber: #b46a00;
+      --amber-soft: #fff4df;
+      --red: #c53434;
+      --red-soft: #fff0f0;
+      --purple: #6f42c1;
+      --purple-soft: #f3edff;
+      --shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+      --radius: 8px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    button,
+    input,
+    textarea,
+    select {
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 7px;
+      padding: 8px 10px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+    }
+
+    button:hover {
+      border-color: var(--line-strong);
+      background: #f8fafc;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    button.primary {
+      background: var(--blue);
+      color: #fff;
+      border-color: var(--blue);
+    }
+
+    button.primary:hover {
+      background: #1e55cf;
+    }
+
+    button.danger {
+      color: var(--red);
+      border-color: #efb3b3;
+      background: var(--red-soft);
+    }
+
+    button.ghost {
+      background: transparent;
+    }
+
+    button.active {
+      color: var(--blue);
+      border-color: #93b4ff;
+      background: var(--blue-soft);
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 9px 10px;
+      color: var(--text);
+      background: #fff;
+      outline: none;
+    }
+
+    textarea {
+      min-height: 78px;
+      resize: vertical;
+    }
+
+    label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .devbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(255, 255, 255, 0.98);
+      border-bottom: 1px solid #e4e9f1;
+      box-shadow: none;
+      backdrop-filter: blur(12px);
+    }
+
+    .devbar-inner {
+      max-width: 1560px;
+      margin: 0 auto;
+      padding: 10px 18px;
+      display: grid;
+      grid-template-columns: 280px minmax(720px, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .brand {
+      min-width: 0;
+    }
+
+    .brand-title {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .brand-subtitle {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      max-width: 270px;
+    }
+
+    .switch-groups {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .switch-group {
+      min-width: 0;
+    }
+
+    .switch-title {
+      margin: 0 0 5px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 750;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .segmented {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .segmented button {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding: 6px 8px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .runtime-switches {
+      display: grid;
+      gap: 6px;
+    }
+
+    .runtime-switches select {
+      min-height: 30px;
+      padding: 5px 8px;
+      font-size: 12px;
+    }
+
+    .top-checkline {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 24px;
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 680;
+      white-space: nowrap;
+    }
+
+    .top-checkline input {
+      width: 14px;
+      height: 14px;
+      margin: 0;
+    }
+
+    .dev-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .workspace {
+      width: min(1560px, 100%);
+      margin: 0 auto;
+      padding: 14px 18px 18px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .prototype-meta {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 11px 14px;
+      background: var(--panel);
+      border: 1px solid #e2e8f0;
+      border-radius: var(--radius);
+    }
+
+    .meta-title {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .meta-desc {
+      margin: 3px 0 0;
+      color: var(--muted);
+    }
+
+    .meta-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: #fff;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .tag.blue {
+      color: var(--blue);
+      border-color: #b9ccff;
+      background: var(--blue-soft);
+    }
+
+    .tag.green {
+      color: var(--green);
+      border-color: #b7e0cc;
+      background: var(--green-soft);
+    }
+
+    .tag.amber {
+      color: var(--amber);
+      border-color: #f2cf91;
+      background: var(--amber-soft);
+    }
+
+    .tag.red {
+      color: var(--red);
+      border-color: #efb3b3;
+      background: var(--red-soft);
+    }
+
+    .shell {
+      display: grid;
+      gap: 12px;
+      min-height: calc(100vh - 150px);
+    }
+
+    .shell.layout-command {
+      --left-col: 304px;
+      --right-col: minmax(430px, 0.86fr);
+      grid-template-columns: var(--left-col) minmax(530px, 1fr) var(--right-col);
+      grid-template-rows: minmax(365px, 1fr) 278px;
+      grid-template-areas:
+        "projects pipeline artifact"
+        "projects decision logs";
+    }
+
+    .shell.layout-command.hide-projects {
+      --left-col: 0px;
+    }
+
+    .shell.layout-command.hide-right {
+      --right-col: 0px;
+    }
+
+    .shell.layout-command.hide-artifact:not(.hide-logs) {
+      grid-template-areas:
+        "projects pipeline logs"
+        "projects decision logs";
+    }
+
+    .shell.layout-command.hide-logs:not(.hide-artifact) {
+      grid-template-areas:
+        "projects pipeline artifact"
+        "projects decision artifact";
+    }
+
+    .shell.layout-review {
+      grid-template-columns: minmax(420px, 1.05fr) minmax(360px, 0.95fr);
+      grid-template-rows: auto minmax(330px, 1fr) 240px;
+      grid-template-areas:
+        "projects projects"
+        "pipeline decision"
+        "artifact logs";
+    }
+
+    .shell.layout-delivery {
+      grid-template-columns: 310px minmax(390px, 1fr) minmax(390px, 1fr);
+      grid-template-rows: minmax(310px, 1fr) minmax(260px, 0.82fr);
+      grid-template-areas:
+        "projects pipeline decision"
+        "artifact artifact logs";
+    }
+
+    .panel {
+      min-width: 0;
+      min-height: 0;
+      background: var(--panel);
+      border: 1px solid #e0e7ef;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .panel-header {
+      min-height: 52px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .panel.hidden-panel {
+      display: none;
+    }
+
+    .panel-title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 760;
+    }
+
+    .panel-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .panel-note {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .icon-button {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      display: inline-grid;
+      place-items: center;
+      background: #fff;
+      border-color: #d5dce7;
+    }
+
+    .icon-button:hover {
+      background: #f8fafc;
+      border-color: #aeb7c6;
+    }
+
+    .side-panel-icon {
+      position: relative;
+      width: 17px;
+      height: 15px;
+      border: 2px solid #7b8493;
+      border-radius: 5px;
+      display: inline-block;
+    }
+
+    .side-panel-icon::before {
+      content: "";
+      position: absolute;
+      top: -2px;
+      bottom: -2px;
+      left: 5px;
+      width: 2px;
+      background: #7b8493;
+    }
+
+    .side-panel-icon.right::before {
+      left: auto;
+      right: 5px;
+    }
+
+    .side-panel-icon.bottom {
+      transform: rotate(90deg);
+    }
+
+    .panel-body {
+      min-height: 0;
+      overflow: auto;
+      padding: 14px;
+    }
+
+    .project-panel {
+      grid-area: projects;
+    }
+
+    .pipeline-panel {
+      grid-area: pipeline;
+    }
+
+    .artifact-panel {
+      grid-area: artifact;
+    }
+
+    .decision-panel {
+      grid-area: decision;
+    }
+
+    .logs-panel {
+      grid-area: logs;
+    }
+
+    .panel-dock {
+      position: fixed;
+      right: 14px;
+      top: 148px;
+      z-index: 18;
+      display: none;
+      gap: 8px;
+    }
+
+    .panel-dock.has-items {
+      display: grid;
+    }
+
+    .dock-button {
+      min-width: 42px;
+      min-height: 42px;
+      padding: 6px;
+      display: grid;
+      place-items: center;
+      gap: 2px;
+      border-color: #cfd7e5;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+    }
+
+    .dock-button span:last-child {
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1;
+    }
+
+    .project-form {
+      display: grid;
+      gap: 12px;
+    }
+
+    .inline-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .checkline {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .checkline input {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+    }
+
+    .project-list {
+      margin-top: 14px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .project-row {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 10px;
+      background: var(--panel-2);
+      display: grid;
+      gap: 6px;
+    }
+
+    .project-row.active {
+      border-color: #93b4ff;
+      background: var(--blue-soft);
+    }
+
+    .row-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: 740;
+    }
+
+    .row-desc {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 760;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .status-pill.running,
+    .status-pill.ready {
+      color: var(--blue);
+      border-color: #b9ccff;
+      background: var(--blue-soft);
+    }
+
+    .status-pill.completed {
+      color: var(--green);
+      border-color: #b7e0cc;
+      background: var(--green-soft);
+    }
+
+    .status-pill.review,
+    .status-pill.conflict {
+      color: var(--amber);
+      border-color: #f2cf91;
+      background: var(--amber-soft);
+    }
+
+    .status-pill.failed {
+      color: var(--red);
+      border-color: #efb3b3;
+      background: var(--red-soft);
+    }
+
+    .pipeline {
+      min-height: 100%;
+    }
+
+    .pipeline.stepper {
+      display: grid;
+      align-content: start;
+      gap: 18px;
+    }
+
+    .stepper-track {
+      display: grid;
+      grid-template-columns:
+        minmax(78px, 0.72fr)
+        minmax(96px, 0.86fr)
+        minmax(210px, 1.8fr)
+        minmax(104px, 0.92fr)
+        minmax(78px, 0.72fr);
+      gap: 10px;
+      position: relative;
+    }
+
+    .step-card {
+      width: 100%;
+      min-width: 0;
+      min-height: 112px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel-2);
+      padding: 10px;
+      display: grid;
+      align-content: space-between;
+      gap: 8px;
+    }
+
+    .step-card.active {
+      border-color: #93b4ff;
+      background: var(--blue-soft);
+    }
+
+    .step-card.done {
+      border-color: #b7e0cc;
+      background: var(--green-soft);
+    }
+
+    .step-card.blocked {
+      border-color: #f2cf91;
+      background: var(--amber-soft);
+    }
+
+    .step-card.error {
+      border-color: #efb3b3;
+      background: var(--red-soft);
+    }
+
+    .step-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 780;
+    }
+
+    .step-meta {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .parallel-branch {
+      min-width: 0;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 10px;
+      border: 1px dashed var(--line-strong);
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .pipeline.dag {
+      display: grid;
+      align-content: center;
+      gap: 14px;
+      min-height: 100%;
+    }
+
+    .dag-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .dag-node {
+      width: min(170px, 100%);
+      min-height: 74px;
+      border: 2px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 10px;
+      display: grid;
+      gap: 6px;
+      text-align: center;
+    }
+
+    .dag-node.active {
+      border-color: var(--blue);
+      background: var(--blue-soft);
+    }
+
+    .dag-node.done {
+      border-color: var(--green);
+      background: var(--green-soft);
+    }
+
+    .dag-node.blocked {
+      border-color: var(--amber);
+      background: var(--amber-soft);
+    }
+
+    .dag-node.error {
+      border-color: var(--red);
+      background: var(--red-soft);
+    }
+
+    .dag-edge {
+      width: 42px;
+      height: 2px;
+      background: var(--line-strong);
+    }
+
+    .dag-branch {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px;
+      align-items: center;
+      justify-items: center;
+    }
+
+    .pipeline.board {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(160px, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .board-col {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel-2);
+      padding: 10px;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 10px;
+    }
+
+    .board-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .board-stack {
+      display: grid;
+      align-content: start;
+      gap: 8px;
+    }
+
+    .mini-card {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      padding: 9px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .mini-card.active {
+      border-color: #93b4ff;
+      background: var(--blue-soft);
+    }
+
+    .mini-card.done {
+      border-color: #b7e0cc;
+      background: var(--green-soft);
+    }
+
+    .mini-card.blocked {
+      border-color: #f2cf91;
+      background: var(--amber-soft);
+    }
+
+    .artifact-tabs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .artifact-tabs button {
+      padding: 6px 8px;
+      font-size: 12px;
+    }
+
+    .artifact-layout {
+      min-height: 100%;
+    }
+
+    .artifact-layout.tabs {
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .artifact-layout.tree {
+      display: grid;
+      grid-template-columns: 180px minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    .file-tree {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel-2);
+      padding: 8px;
+      display: grid;
+      align-content: start;
+      gap: 4px;
+    }
+
+    .file-node {
+      border: 0;
+      border-radius: 5px;
+      padding: 6px 7px;
+      background: transparent;
+      text-align: left;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .file-node.active {
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+
+    .viewer {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #0f172a;
+      color: #dbeafe;
+      overflow: hidden;
+      min-height: 280px;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .viewer-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 38px;
+      padding: 8px 10px;
+      background: #111827;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      font-size: 12px;
+      font-family: var(--mono);
+    }
+
+    pre {
+      margin: 0;
+      padding: 12px;
+      overflow: auto;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .diff-view {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .diff-view .viewer {
+      min-height: 320px;
+    }
+
+    .decision-stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .state-card {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel-2);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .state-card.conflict {
+      border-color: #f2cf91;
+      background: var(--amber-soft);
+    }
+
+    .state-card.review {
+      border-color: #b9ccff;
+      background: var(--blue-soft);
+    }
+
+    .state-card.completed {
+      border-color: #b7e0cc;
+      background: var(--green-soft);
+    }
+
+    .state-card.failed {
+      border-color: #efb3b3;
+      background: var(--red-soft);
+    }
+
+    .state-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .state-heading h3 {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .mismatch-table {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .mismatch-row {
+      display: grid;
+      grid-template-columns: 110px 1fr 1fr;
+      gap: 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .mismatch-row:last-child {
+      border-bottom: 0;
+    }
+
+    .mismatch-cell {
+      padding: 8px;
+      border-right: 1px solid var(--line);
+      font-size: 12px;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .mismatch-cell:last-child {
+      border-right: 0;
+    }
+
+    .mismatch-head {
+      font-weight: 750;
+      color: var(--muted);
+      background: #f8fafc;
+    }
+
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      padding: 9px;
+      display: grid;
+      gap: 2px;
+    }
+
+    .metric-value {
+      font-size: 18px;
+      font-weight: 780;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .log-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .log-item {
+      display: grid;
+      grid-template-columns: 74px 1fr;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel-2);
+      padding: 9px;
+    }
+
+    .log-time {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .log-main {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .log-title {
+      font-weight: 720;
+    }
+
+    .log-desc {
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 30;
+      max-width: min(420px, calc(100vw - 36px));
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #101828;
+      color: #fff;
+      box-shadow: 0 16px 42px rgba(15, 23, 42, 0.22);
+      padding: 12px 14px;
+      display: none;
+    }
+
+    .toast.show {
+      display: block;
+    }
+
+    .wire-note {
+      color: var(--muted);
+      font-size: 12px;
+      margin: 0;
+    }
+
+    @media (max-width: 1120px) {
+      .devbar-inner {
+        grid-template-columns: 1fr;
+      }
+
+      .dev-actions {
+        justify-content: flex-start;
+      }
+
+      .shell.layout-command,
+      .shell.layout-review,
+      .shell.layout-delivery {
+        grid-template-columns: 1fr;
+        grid-template-rows: none;
+        grid-template-areas:
+          "projects"
+          "pipeline"
+          "decision"
+          "artifact"
+          "logs";
+      }
+
+      .switch-groups {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .artifact-layout.tree,
+      .diff-view {
+        grid-template-columns: 1fr;
+      }
+
+      .pipeline.board {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
+      .workspace {
+        padding: 12px;
+      }
+
+      .prototype-meta,
+      .inline-grid,
+      .metric-grid,
+      .mismatch-row,
+      .stepper-track,
+      .parallel-branch,
+      .dag-branch,
+      .pipeline.board,
+      .switch-groups {
+        grid-template-columns: 1fr;
+      }
+
+      .meta-tags {
+        justify-content: flex-start;
+      }
+
+      .panel-header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .panel-note {
+        white-space: normal;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="devbar">
+      <div class="devbar-inner">
+        <section class="brand" aria-label="prototype title">
+          <h1 class="brand-title">Prototype Dev Controls / 原型开发控制台</h1>
+          <div class="brand-subtitle">AI Software Company 多 Agent 协作平台。线框图版本，用来讨论信息架构、状态表达和 Human CTO 操作路径。</div>
+        </section>
+
+        <section class="switch-groups" aria-label="prototype controls">
+          <div class="switch-group">
+            <p class="switch-title">页面版本</p>
+            <div class="segmented" data-control="layout">
+              <button class="active" data-value="command">Version A: Command Center</button>
+              <button data-value="review">Version B: Review Console</button>
+              <button data-value="delivery">Version C: Delivery Desk</button>
+            </div>
+          </div>
+
+          <div class="switch-group">
+            <p class="switch-title">Pipeline</p>
+            <div class="segmented" data-control="pipeline">
+              <button class="active" data-value="stepper">横向阶段条</button>
+              <button data-value="dag">DAG 分叉图</button>
+              <button data-value="board">Kanban/Board</button>
+            </div>
+          </div>
+
+          <div class="switch-group">
+            <p class="switch-title">Artifact</p>
+            <div class="segmented" data-control="artifact">
+              <button data-value="tabs">Agent Tabs</button>
+              <button class="active" data-value="tree">文件树+内容区</button>
+              <button data-value="diff">双栏对照</button>
+            </div>
+          </div>
+
+          <div class="switch-group">
+            <p class="switch-title">状态场景</p>
+            <div class="segmented" data-control="scenario">
+              <button data-value="running">Running</button>
+              <button data-value="review">Awaiting Review</button>
+              <button class="active" data-value="conflict">Conflict</button>
+              <button data-value="completed">Completed</button>
+              <button data-value="failed">Failed</button>
+            </div>
+          </div>
+
+          <div class="switch-group">
+            <p class="switch-title">运行开关</p>
+            <div class="runtime-switches">
+              <select id="topProviderMode" aria-label="Mock or LLM mode">
+                <option value="mock" selected>Mock mode</option>
+                <option value="llm">LLM mode</option>
+              </select>
+              <label class="top-checkline">
+                <input id="topForceConflict" type="checkbox" checked>
+                force_api_conflict
+              </label>
+              <label class="top-checkline">
+                <input id="topReviewRequired" type="checkbox" checked>
+                human_review_required
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section class="dev-actions" aria-label="simulation actions">
+          <button id="focusStage">聚焦主舞台</button>
+          <button id="simulateBuild" class="primary">模拟构建</button>
+          <button id="nextStage">下一阶段</button>
+          <button id="resetPrototype" class="ghost">重置</button>
+        </section>
+      </div>
+    </header>
+
+    <section class="workspace">
+      <section class="prototype-meta">
+        <div>
+          <h2 id="prototypeTitle" class="meta-title">Version A：Command Center 主舞台布局</h2>
+          <p id="prototypeDesc" class="meta-desc">适合自助演示：左侧项目，中间编排主舞台，右侧产物与状态处理。</p>
+        </div>
+        <div class="meta-tags" id="metaTags"></div>
+      </section>
+
+      <section id="shell" class="shell layout-command">
+        <article class="panel project-panel" data-panel="projects">
+          <header class="panel-header">
+            <h2 class="panel-title">Project List / Project Summary</h2>
+            <div class="panel-tools">
+              <span class="panel-note">Create Project / Start Build</span>
+              <button class="icon-button" data-panel-toggle="projects" title="隐藏 Brief side panel" aria-label="隐藏 Brief side panel">
+                <span class="side-panel-icon"></span>
+              </button>
+            </div>
+          </header>
+          <div class="panel-body">
+            <form class="project-form" id="projectForm">
+              <label>
+                项目名称
+                <input id="projectName" value="排课系统" autocomplete="off">
+              </label>
+              <label>
+                需求描述
+                <textarea id="requirement">为教务人员设计一个排课系统，支持课程管理、教师排班、教室资源冲突检测、学生课表查看。</textarea>
+              </label>
+              <div class="inline-grid">
+                <label>
+                  Mock / LLM 模式
+                  <select id="providerMode">
+                    <option value="mock" selected>Mock（无 Key 可演示）</option>
+                    <option value="llm">LLM（必须显式切换）</option>
+                  </select>
+                </label>
+                <label>
+                  BuildRun context
+                  <select id="contextPolicy">
+                    <option value="fresh" selected>fresh</option>
+                    <option value="inherit_project_input">inherit input</option>
+                    <option value="inherit_selected_artifacts">inherit selected</option>
+                  </select>
+                </label>
+              </div>
+              <label class="checkline">
+                <input id="forceConflict" type="checkbox" checked>
+                force_api_conflict：制造 Frontend/Backend API 冲突
+              </label>
+              <label class="checkline">
+                <input id="reviewRequired" type="checkbox" checked>
+                human_review_required：开启 Human CTO 审核点
+              </label>
+              <p class="wire-note">Mock 模式不需要 LLM Key；LLM 模式必须由用户显式选择，原型不会自动 fallback。</p>
+              <button type="button" class="primary" id="startBuild">Start BuildRun</button>
+            </form>
+
+            <section class="project-list" aria-label="project list">
+              <div class="project-row active">
+                <div class="row-title">
+                  <span id="projectListName">排课系统</span>
+                  <span id="projectStatus" class="status-pill conflict">conflict</span>
+                </div>
+                <div class="row-desc">active BuildRun: BR-2026-0530-001</div>
+              </div>
+              <div class="project-row">
+                <div class="row-title">
+                  <span>客户支持知识库</span>
+                  <span class="status-pill completed">completed</span>
+                </div>
+                <div class="row-desc">历史项目，用于列表密度对比。</div>
+              </div>
+            </section>
+          </div>
+        </article>
+
+        <article class="panel pipeline-panel" data-panel="pipeline">
+          <header class="panel-header">
+            <h2 class="panel-title">BuildRun Pipeline</h2>
+            <span id="pipelineNote" class="panel-note">PM -> Architect -> FE/BE parallel -> Orchestrator Contract Check -> QA</span>
+          </header>
+          <div class="panel-body">
+            <div id="pipelineRoot" class="pipeline stepper"></div>
+          </div>
+        </article>
+
+        <article class="panel artifact-panel" data-panel="artifact">
+          <header class="panel-header">
+            <h2 class="panel-title">Artifact Viewer</h2>
+            <div class="panel-tools">
+              <span id="artifactNote" class="panel-note">latest valid/repaired artifact</span>
+              <button class="icon-button" data-panel-toggle="artifact" title="隐藏 Evidence side panel" aria-label="隐藏 Evidence side panel">
+                <span class="side-panel-icon right"></span>
+              </button>
+            </div>
+          </header>
+          <div class="panel-body">
+            <div class="artifact-tabs" id="artifactTabs"></div>
+            <div id="artifactRoot" class="artifact-layout tree"></div>
+          </div>
+        </article>
+
+        <article class="panel decision-panel" data-panel="decision">
+          <header class="panel-header">
+            <h2 class="panel-title">CTO Decision / Runtime State</h2>
+            <span id="decisionNote" class="panel-note">状态相关操作区</span>
+          </header>
+          <div class="panel-body">
+            <div id="decisionRoot" class="decision-stack"></div>
+          </div>
+        </article>
+
+        <article class="panel logs-panel" data-panel="logs">
+          <header class="panel-header">
+            <h2 class="panel-title">Event Logs</h2>
+            <div class="panel-tools">
+              <span class="panel-note">AgentRun、retry、harness repair、conflict decision</span>
+              <button class="icon-button" data-panel-toggle="logs" title="隐藏 Logs side panel" aria-label="隐藏 Logs side panel">
+                <span class="side-panel-icon bottom"></span>
+              </button>
+            </div>
+          </header>
+          <div class="panel-body">
+            <div id="logRoot" class="log-list"></div>
+          </div>
+        </article>
+      </section>
+      <aside id="panelDock" class="panel-dock" aria-label="hidden side panels"></aside>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const agents = [
+      { id: "pm", label: "PM Agent", artifact: "prd.md", attempt: 1 },
+      { id: "architect", label: "Architect Agent", artifact: "architecture.md + api-contract.json", attempt: 1 },
+      { id: "frontend", label: "Frontend Agent", artifact: "frontend/ + api-usages.json", attempt: 1 },
+      { id: "backend", label: "Backend Agent", artifact: "backend/ + routes.json", attempt: 1 },
+      { id: "contract", label: "Orchestrator", artifact: "ContractChecker + ArtifactHarness", attempt: 1 },
+      { id: "qa", label: "QA Agent", artifact: "qa_report.md", attempt: 0 }
+    ];
+
+    const prototypeDescriptions = {
+      command: {
+        title: "Version A：Command Center 主舞台布局",
+        desc: "适合自助演示：左侧项目，中间编排主舞台，右侧产物与状态处理。"
+      },
+      review: {
+        title: "Version B：Review Console 审核控制台布局",
+        desc: "适合强调 human-in-the-loop：把 Review Panel 与 Conflict Panel 放到首屏中心，底部保留证据。"
+      },
+      delivery: {
+        title: "Version C：Delivery Desk 交付工作台布局",
+        desc: "适合最终交付验收：左侧项目，中间流程，右侧导出闭环，底部大面积查看 artifact。"
+      }
+    };
+
+    const scenarioMeta = {
+      running: { label: "running", className: "running" },
+      review: { label: "awaiting_review", className: "review" },
+      conflict: { label: "conflict", className: "conflict" },
+      completed: { label: "completed", className: "completed" },
+      failed: { label: "failed", className: "failed" }
+    };
+
+    const sidePanels = {
+      projects: { label: "Brief", icon: "" },
+      artifact: { label: "Evidence", icon: "right" },
+      logs: { label: "Logs", icon: "bottom" }
+    };
+
+    const artifactContent = {
+      pm: {
+        title: "prd.md",
+        files: ["prd.md"],
+        content: `# PRD - 排课系统
+
+## 产品目标
+为教务人员设计一个排课系统，支持课程管理、教师排班、教室资源冲突检测、学生课表查看。
+
+## 目标用户
+- 教务管理员
+- 院系排课负责人
+- 教师
+- 学生
+
+## 核心功能列表
+1. 课程管理
+2. 教师排班
+3. 教室资源冲突检测
+4. 学生课表查看
+5. 排课结果导出
+
+## 验收标准
+- 无 LLM Key 时 Mock 模式完整跑通
+- LLM 模式必须显式切换，不能自动 fallback
+- Human CTO 可以审核 Agent 产物
+- 生成 frontend/backend 下载后应该能单独运行`
+      },
+      architect: {
+        title: "architecture.md",
+        files: ["architecture.md", "api-contract.json"],
+        content: `# Architecture - 排课系统
+
+## 模块
+- Web UI
+- Scheduling API
+- Conflict Detection Service
+- SQLite persistence
+
+## API Contract
+GET /api/courses
+POST /api/courses
+GET /api/teachers
+GET /api/classrooms
+POST /api/schedules/check-conflicts
+
+## 数据模型
+- Course
+- Teacher
+- Classroom
+- ScheduleSlot
+
+## Orchestrator Responsibilities
+- 状态机调度 PM -> Architect -> Frontend/Backend -> Contract Check -> QA
+- ContractChecker 校验 frontend api-usages.json 和 backend routes.json
+- ArtifactHarness 修复 markdown 标题、manifest、启动脚本等结构性问题
+- ZIP Export 打包 prd.md、architecture.md、frontend/、backend/、qa_report.md`
+      },
+      frontend: {
+        title: "frontend/src/api.ts",
+        files: ["frontend/README.md", "frontend/package.json", "frontend/src/App.tsx", "frontend/src/api.ts", "frontend/manifest/api-usages.json", "frontend/manifest/run.json"],
+        content: `export async function listCourses() {
+  return fetch("/api/course-list").then((res) => res.json());
+}
+
+export async function checkScheduleConflicts(payload) {
+  return fetch("/api/schedule/check", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  }).then((res) => res.json());
+}
+
+// Harness extracts:
+// GET /api/course-list
+// POST /api/schedule/check`
+      },
+      backend: {
+        title: "backend/src/server.ts",
+        files: ["backend/README.md", "backend/package.json", "backend/src/server.ts", "backend/manifest/routes.json", "backend/manifest/run.json"],
+        content: `app.get("/api/courses", async (req, res) => {
+  res.json(seedCourses);
+});
+
+app.post("/api/schedules/check-conflicts", async (req, res) => {
+  const result = checkConflicts(req.body);
+  res.json(result);
+});
+
+// Harness extracts:
+// GET /api/courses
+// POST /api/schedules/check-conflicts`
+      },
+      contract: {
+        title: "orchestrator/contract-check-result.json",
+        files: ["orchestrator/state-machine.md", "orchestrator/contract-check-result.json", "orchestrator/zip-manifest.json"],
+        content: `{
+  "orchestrator": "ContractChecker",
+  "state": "paused_conflict",
+  "force_api_conflict": true,
+  "frontend_calls": [
+    "GET /api/course-list",
+    "POST /api/schedule/check"
+  ],
+  "backend_routes": [
+    "GET /api/courses",
+    "POST /api/schedules/check-conflicts"
+  ],
+  "mismatches": [
+    {
+      "frontend": "GET /api/course-list",
+      "backend_candidate": "GET /api/courses",
+      "message": "Frontend 使用 /api/course-list，但 Backend 只有 /api/courses"
+    },
+    {
+      "frontend": "POST /api/schedule/check",
+      "backend_candidate": "POST /api/schedules/check-conflicts",
+      "message": "Frontend 使用 /api/schedule/check，但 Backend 只有 /api/schedules/check-conflicts"
+    }
+  ],
+  "available_cto_decisions": [
+    "align_to_frontend",
+    "align_to_backend",
+    "force_pass"
+  ]
+}`
+      },
+      qa: {
+        title: "qa_report.md",
+        files: ["qa_report.md"],
+        content: `# QA Report
+
+## 测试范围
+- 项目创建
+- Mock BuildRun
+- API conflict resolution
+- ZIP export
+
+## 测试用例
+1. force_api_conflict=true 时进入 conflict
+2. CTO 选择以后端为准后 Frontend 重跑
+3. QA 完成后 ZIP preflight 通过
+
+## 结论
+当前 BuildRun 可进入可下载状态。`
+      }
+    };
+
+    const baseLogs = [
+      ["10:42:31", "ContractChecker found 2 API mismatches", "Frontend uses /api/course-list and /api/schedule/check, but backend exposes /api/courses and /api/schedules/check-conflicts."],
+      ["10:42:18", "Frontend and Backend AgentRuns started in parallel", "Frontend emitted api-usages.json; Backend emitted routes.json."],
+      ["10:42:05", "Architect AgentRun completed", "architecture.md and api-contract.json are valid."],
+      ["10:41:58", "ArtifactHarness repaired prd.md title", "Normalized markdown title to '# PRD - 排课系统'."],
+      ["10:41:52", "PM AgentRun completed", "prd.md generated from project requirement."],
+      ["10:41:40", "BuildRun created", "provider_mode=mock, force_api_conflict=true, human_review_required=true."]
+    ];
+
+    const state = {
+      layout: "command",
+      pipeline: "stepper",
+      artifact: "tree",
+      scenario: "conflict",
+      selectedAgent: "frontend",
+      selectedFile: "frontend/src/api.ts",
+      stageIndex: 3,
+      collapsedPanels: {
+        projects: false,
+        artifact: false,
+        logs: false
+      },
+      logs: [...baseLogs]
+    };
+
+    const qs = (selector) => document.querySelector(selector);
+    const qsa = (selector) => Array.from(document.querySelectorAll(selector));
+
+    function classForAgent(agentId) {
+      const scenario = state.scenario;
+      if (scenario === "failed") {
+        if (agentId === "backend") return "error";
+        if (["pm", "architect", "frontend"].includes(agentId)) return "done";
+        return "";
+      }
+      if (scenario === "completed") return "done";
+      if (scenario === "review") {
+        if (["pm", "architect"].includes(agentId)) return "done";
+        if (agentId === "frontend" || agentId === "backend") return "active";
+        return "";
+      }
+      if (scenario === "conflict") {
+        if (["pm", "architect", "frontend", "backend"].includes(agentId)) return "done";
+        if (agentId === "contract") return "blocked";
+        return "";
+      }
+      if (scenario === "running") {
+        const order = ["pm", "architect", "frontend", "backend", "contract", "qa"];
+        const current = order[state.stageIndex] || "frontend";
+        const currentIndex = order.indexOf(current);
+        const agentIndex = order.indexOf(agentId);
+        if (agentIndex < currentIndex) return "done";
+        if (agentId === current || (current === "frontend" && agentId === "backend")) return "active";
+        return "";
+      }
+      return "";
+    }
+
+    function statusText(agentId) {
+      const cls = classForAgent(agentId);
+      if (cls === "done") return "completed";
+      if (cls === "active") return "running";
+      if (cls === "blocked") return "blocked";
+      if (cls === "error") return "failed";
+      return "pending";
+    }
+
+    function renderMeta() {
+      const meta = prototypeDescriptions[state.layout];
+      qs("#prototypeTitle").textContent = meta.title;
+      qs("#prototypeDesc").textContent = meta.desc;
+      const provider = qs("#providerMode").value;
+      const conflict = qs("#forceConflict").checked;
+      const review = qs("#reviewRequired").checked;
+      qs("#topProviderMode").value = provider;
+      qs("#topForceConflict").checked = conflict;
+      qs("#topReviewRequired").checked = review;
+      qs("#metaTags").innerHTML = [
+        `<span class="tag blue">layout: ${state.layout}</span>`,
+        `<span class="tag">pipeline: ${state.pipeline}</span>`,
+        `<span class="tag">artifact: ${state.artifact}</span>`,
+        `<span class="tag ${scenarioMeta[state.scenario].className}">status: ${scenarioMeta[state.scenario].label}</span>`,
+        `<span class="tag ${provider === "mock" ? "green" : "amber"}">provider: ${provider}</span>`,
+        `<span class="tag ${conflict ? "amber" : "green"}">conflict switch: ${conflict ? "on" : "off"}</span>`,
+        `<span class="tag ${review ? "blue" : ""}">review: ${review ? "on" : "off"}</span>`
+      ].join("");
+      const projectName = qs("#projectName").value || "未命名项目";
+      qs("#projectListName").textContent = projectName;
+      const projectStatus = qs("#projectStatus");
+      projectStatus.className = `status-pill ${scenarioMeta[state.scenario].className}`;
+      projectStatus.textContent = scenarioMeta[state.scenario].label;
+    }
+
+    function renderPipeline() {
+      const root = qs("#pipelineRoot");
+      root.className = `pipeline ${state.pipeline}`;
+      if (state.pipeline === "stepper") renderStepper(root);
+      if (state.pipeline === "dag") renderDag(root);
+      if (state.pipeline === "board") renderBoard(root);
+    }
+
+    function nodeHtml(agent, className, type = "step-card") {
+      const status = statusText(agent.id);
+      const attempt = agent.id === "backend" && state.scenario === "conflict" ? 1 : agent.attempt;
+      return `
+        <button class="${type} ${className}" data-agent="${agent.id}">
+          <h3 class="step-title">${agent.label}</h3>
+          <div class="step-meta">${agent.artifact}</div>
+          <span class="status-pill ${status === "blocked" ? "conflict" : status}">${status}</span>
+          <div class="step-meta">attempt ${attempt || "-"}</div>
+        </button>
+      `;
+    }
+
+    function renderStepper(root) {
+      const pm = agents.find((agent) => agent.id === "pm");
+      const architect = agents.find((agent) => agent.id === "architect");
+      const frontend = agents.find((agent) => agent.id === "frontend");
+      const backend = agents.find((agent) => agent.id === "backend");
+      const contract = agents.find((agent) => agent.id === "contract");
+      const qa = agents.find((agent) => agent.id === "qa");
+      root.innerHTML = `
+        <div class="stepper-track">
+          ${nodeHtml(pm, classForAgent("pm"))}
+          ${nodeHtml(architect, classForAgent("architect"))}
+          <div class="parallel-branch">
+            ${nodeHtml(frontend, classForAgent("frontend"))}
+            ${nodeHtml(backend, classForAgent("backend"))}
+          </div>
+          ${nodeHtml(contract, classForAgent("contract"))}
+          ${nodeHtml(qa, classForAgent("qa"))}
+        </div>
+        <p class="wire-note">阶段条版本强调“从左到右”的可解释流程，适合第一版 MVP。</p>
+      `;
+    }
+
+    function renderDag(root) {
+      root.innerHTML = `
+        <div class="dag-row">
+          ${dagNode("pm")}
+          <div class="dag-edge"></div>
+          ${dagNode("architect")}
+        </div>
+        <div class="dag-branch">
+          ${dagNode("frontend")}
+          ${dagNode("backend")}
+        </div>
+        <div class="dag-row">
+          ${dagNode("contract")}
+          <div class="dag-edge"></div>
+          ${dagNode("qa")}
+        </div>
+        <p class="wire-note">DAG 版本更像架构图，适合突出 Frontend/Backend 并行和 Orchestrator ContractChecker。</p>
+      `;
+    }
+
+    function dagNode(agentId) {
+      const agent = agents.find((item) => item.id === agentId);
+      const status = statusText(agentId);
+      return `
+        <button class="dag-node ${classForAgent(agentId)}" data-agent="${agentId}">
+          <strong>${agent.label}</strong>
+          <span class="step-meta">${agent.artifact}</span>
+          <span class="status-pill ${status === "blocked" ? "conflict" : status}">${status}</span>
+        </button>
+      `;
+    }
+
+    function renderBoard(root) {
+      const columns = [
+        ["Plan", ["pm", "architect"]],
+        ["Build", ["frontend", "backend"]],
+        ["Orchestrator Gate", ["contract"]],
+        ["Delivery", ["qa"]]
+      ];
+      root.innerHTML = columns.map(([title, ids]) => `
+        <section class="board-col">
+          <div class="board-title"><span>${title}</span><span>${ids.length}</span></div>
+          <div class="board-stack">
+            ${ids.map((id) => {
+              const agent = agents.find((item) => item.id === id);
+              return `
+                <button class="mini-card ${classForAgent(id)}" data-agent="${id}">
+                  <strong>${agent.label}</strong>
+                  <span class="step-meta">${agent.artifact}</span>
+                  <span class="status-pill ${statusText(id) === "blocked" ? "conflict" : statusText(id)}">${statusText(id)}</span>
+                </button>
+              `;
+            }).join("")}
+          </div>
+        </section>
+      `).join("");
+    }
+
+    function renderArtifactTabs() {
+      qs("#artifactTabs").innerHTML = ["pm", "architect", "frontend", "backend", "contract", "qa"].map((id) => {
+        const agent = agents.find((item) => item.id === id);
+        return `<button class="${state.selectedAgent === id ? "active" : ""}" data-artifact-agent="${id}">${agent.label}</button>`;
+      }).join("");
+    }
+
+    function renderArtifact() {
+      renderArtifactTabs();
+      const root = qs("#artifactRoot");
+      root.className = `artifact-layout ${state.artifact}`;
+      const data = artifactContent[state.selectedAgent] || artifactContent.frontend;
+      if (!data.files.includes(state.selectedFile)) {
+        state.selectedFile = data.files[0];
+      }
+      if (state.artifact === "tabs") {
+        root.innerHTML = viewerHtml(data.title, data.content);
+      } else if (state.artifact === "tree") {
+        root.innerHTML = `
+          <nav class="file-tree" aria-label="artifact file tree">
+            ${data.files.map((file) => `<button class="file-node ${state.selectedFile === file ? "active" : ""}" data-file="${file}">${file}</button>`).join("")}
+          </nav>
+          ${viewerHtml(state.selectedFile, data.content)}
+        `;
+      } else {
+        root.innerHTML = `
+          <div class="diff-view">
+            ${viewerHtml("Frontend API usage - api-usages.json", artifactContent.frontend.content)}
+            ${viewerHtml("Backend routes - routes.json", artifactContent.backend.content)}
+          </div>
+        `;
+      }
+    }
+
+    function viewerHtml(title, content) {
+      return `
+        <section class="viewer">
+          <div class="viewer-toolbar">
+            <span>${title}</span>
+            <span>read-only prototype</span>
+          </div>
+          <pre>${escapeHtml(content)}</pre>
+        </section>
+      `;
+    }
+
+    function renderDecision() {
+      const root = qs("#decisionRoot");
+      if (state.scenario === "conflict") {
+        root.innerHTML = `
+          <section class="state-card conflict">
+            <div class="state-heading">
+              <h3>Conflict Panel: FE/BE API mismatch</h3>
+              <span class="status-pill conflict">paused_conflict</span>
+            </div>
+            <p class="wire-note">Conflict 是业务状态，只表示 Frontend/Backend API 契约不一致。它不是 failed。</p>
+            <div class="mismatch-table" role="table">
+              <div class="mismatch-row mismatch-head" role="row">
+                <div class="mismatch-cell">字段</div>
+                <div class="mismatch-cell">Frontend usage</div>
+                <div class="mismatch-cell">Backend route</div>
+              </div>
+              <div class="mismatch-row" role="row">
+                <div class="mismatch-cell">GET courses</div>
+                <div class="mismatch-cell"><code>GET /api/course-list</code></div>
+                <div class="mismatch-cell"><code>GET /api/courses</code></div>
+              </div>
+              <div class="mismatch-row" role="row">
+                <div class="mismatch-cell">POST conflict check</div>
+                <div class="mismatch-cell"><code>POST /api/schedule/check</code></div>
+                <div class="mismatch-cell"><code>POST /api/schedules/check-conflicts</code></div>
+              </div>
+              <div class="mismatch-row" role="row">
+                <div class="mismatch-cell">原因</div>
+                <div class="mismatch-cell">Frontend 使用未在 contract 中声明的路径</div>
+                <div class="mismatch-cell">Backend 只有 contract 规范路径</div>
+              </div>
+            </div>
+            <div class="action-row">
+              <button class="primary" data-decision="frontend">以前端为准</button>
+              <button data-decision="backend">以后端为准</button>
+              <button data-decision="force">强制通过</button>
+            </div>
+          </section>
+          ${metricsHtml()}
+          ${exportPanelHtml()}
+        `;
+      } else if (state.scenario === "review") {
+        root.innerHTML = `
+          <section class="state-card review">
+            <div class="state-heading">
+              <h3>Review Panel: Awaiting Human CTO Review</h3>
+              <span class="status-pill review">awaiting_review</span>
+            </div>
+            <p class="wire-note">v0.1 只需要查看产物并点击通过；编辑和 revision 作为后续扩展。</p>
+            <div class="action-row">
+              <button class="primary" data-review-action="approve">Approve Review / 通过审核</button>
+              <button data-review-action="request">要求重跑当前 Agent</button>
+            </div>
+          </section>
+          ${metricsHtml()}
+          ${exportPanelHtml()}
+        `;
+      } else if (state.scenario === "completed") {
+        root.innerHTML = `
+          <section class="state-card completed">
+            <div class="state-heading">
+              <h3>Export / ZIP Download</h3>
+              <span class="status-pill completed">ready_for_export</span>
+            </div>
+            <p class="wire-note">ZIP preflight passed。导出包包含 prd.md、architecture.md、frontend/、backend/、qa_report.md。</p>
+            <div class="action-row">
+              <button class="primary" data-export="zip">Download ZIP / 下载 ZIP（模拟）</button>
+              <button data-export="manifest">查看 Export Manifest</button>
+            </div>
+          </section>
+          ${metricsHtml()}
+        `;
+      } else if (state.scenario === "failed") {
+        root.innerHTML = `
+          <section class="state-card failed">
+            <div class="state-heading">
+              <h3>BuildRun failed</h3>
+              <span class="status-pill failed">failure_category: generation_invalid</span>
+            </div>
+            <p class="wire-note">失败需要可解释：可见 failure_category，例如 provider_config、generation_invalid、contract_parse_error。这里模拟 Backend 缺少启动入口，Harness 无法 repair，retry 耗尽。</p>
+            <div class="action-row">
+              <button class="primary" data-failure="rerun">创建新 BuildRun</button>
+              <button data-failure="inspect">查看失败 AgentRun</button>
+            </div>
+          </section>
+          ${metricsHtml()}
+          ${exportPanelHtml()}
+        `;
+      } else {
+        root.innerHTML = `
+          <section class="state-card">
+            <div class="state-heading">
+              <h3>Runtime running</h3>
+              <span class="status-pill running">running</span>
+            </div>
+            <p class="wire-note">Scheduler 正在执行 ready AgentRun。FE/BE 在 implementation 阶段可并行。</p>
+            <div class="action-row">
+              <button class="primary" id="quickConflict">触发冲突场景</button>
+              <button id="quickReview">进入审核场景</button>
+            </div>
+          </section>
+          ${metricsHtml()}
+          ${exportPanelHtml()}
+        `;
+      }
+    }
+
+    function exportPanelHtml() {
+      return `
+        <section class="state-card">
+          <div class="state-heading">
+            <h3>Export / ZIP Download</h3>
+            <span class="status-pill running">preflight_pending</span>
+          </div>
+          <p class="wire-note">ZIP 会在 QA 通过后解锁，目标内容：prd.md、architecture.md、frontend/、backend/、qa_report.md。</p>
+          <div class="action-row">
+            <button data-export-disabled="true">Download ZIP pending</button>
+            <button data-export-disabled="true">View ZIP manifest preview</button>
+          </div>
+        </section>
+      `;
+    }
+
+    function metricsHtml() {
+      const retry = state.scenario === "failed" ? "2/2" : state.scenario === "conflict" ? "0/2" : "0/2";
+      const conflicts = state.scenario === "conflict" ? "2 open" : "0 open";
+      const artifacts = state.scenario === "running" ? "3" : state.scenario === "failed" ? "4" : "5";
+      return `
+        <section class="metric-grid">
+          <div class="metric">
+            <div class="metric-value">${artifacts}</div>
+            <div class="metric-label">valid artifacts</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${retry}</div>
+            <div class="metric-label">retry budget</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${conflicts}</div>
+            <div class="metric-label">conflicts</div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderLogs() {
+      qs("#logRoot").innerHTML = state.logs.map(([time, title, desc]) => `
+        <section class="log-item">
+          <div class="log-time">${time}</div>
+          <div class="log-main">
+            <div class="log-title">${title}</div>
+            <div class="log-desc">${desc}</div>
+          </div>
+        </section>
+      `).join("");
+    }
+
+    function syncShellClass() {
+      const hidden = Object.entries(state.collapsedPanels)
+        .filter(([, collapsed]) => collapsed)
+        .map(([panel]) => `hide-${panel}`);
+      if (state.collapsedPanels.artifact && state.collapsedPanels.logs) {
+        hidden.push("hide-right");
+      }
+      qs("#shell").className = `shell layout-${state.layout} ${hidden.join(" ")}`.trim();
+      Object.keys(sidePanels).forEach((panel) => {
+        const el = qs(`[data-panel="${panel}"]`);
+        if (el) el.classList.toggle("hidden-panel", state.collapsedPanels[panel]);
+      });
+    }
+
+    function renderPanelDock() {
+      const hiddenPanels = Object.entries(state.collapsedPanels)
+        .filter(([, collapsed]) => collapsed)
+        .map(([panel]) => panel);
+      const dock = qs("#panelDock");
+      dock.classList.toggle("has-items", hiddenPanels.length > 0);
+      dock.innerHTML = hiddenPanels.map((panel) => {
+        const meta = sidePanels[panel];
+        return `
+          <button class="dock-button" data-panel-restore="${panel}" title="显示 ${meta.label}" aria-label="显示 ${meta.label}">
+            <span class="side-panel-icon ${meta.icon}"></span>
+            <span>${meta.label}</span>
+          </button>
+        `;
+      }).join("");
+    }
+
+    function syncButtons() {
+      qsa("[data-control]").forEach((group) => {
+        const key = group.dataset.control;
+        qsa(`[data-control="${key}"] button`).forEach((button) => {
+          button.classList.toggle("active", button.dataset.value === state[key]);
+        });
+      });
+    }
+
+    function renderAll() {
+      syncShellClass();
+      syncButtons();
+      renderMeta();
+      renderPipeline();
+      renderArtifact();
+      renderDecision();
+      renderLogs();
+      renderPanelDock();
+    }
+
+    function addLog(title, desc) {
+      const now = new Date();
+      const time = now.toTimeString().slice(0, 8);
+      state.logs.unshift([time, title, desc]);
+      state.logs = state.logs.slice(0, 10);
+    }
+
+    function toast(message) {
+      const el = qs("#toast");
+      el.textContent = message;
+      el.classList.add("show");
+      window.clearTimeout(window.__toastTimer);
+      window.__toastTimer = window.setTimeout(() => el.classList.remove("show"), 2200);
+    }
+
+    function setScenario(value, message) {
+      state.scenario = value;
+      if (value === "running") state.stageIndex = 2;
+      if (value === "conflict") state.selectedAgent = "frontend";
+      if (value === "completed") state.selectedAgent = "qa";
+      if (value === "failed") state.selectedAgent = "backend";
+      addLog(`Scenario changed to ${value}`, message || "Prototype state switched by developer control.");
+      renderAll();
+    }
+
+    function escapeHtml(value) {
+      return value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
+
+    function syncRuntimeControls(source) {
+      if (source === "top") {
+        qs("#providerMode").value = qs("#topProviderMode").value;
+        qs("#forceConflict").checked = qs("#topForceConflict").checked;
+        qs("#reviewRequired").checked = qs("#topReviewRequired").checked;
+      } else {
+        qs("#topProviderMode").value = qs("#providerMode").value;
+        qs("#topForceConflict").checked = qs("#forceConflict").checked;
+        qs("#topReviewRequired").checked = qs("#reviewRequired").checked;
+      }
+      addLog("Runtime switches changed", `provider=${qs("#providerMode").value}, force_api_conflict=${qs("#forceConflict").checked}, human_review_required=${qs("#reviewRequired").checked}.`);
+      renderAll();
+    }
+
+    qsa("[data-control] button").forEach((button) => {
+      button.addEventListener("click", () => {
+        const group = button.closest("[data-control]");
+        const key = group.dataset.control;
+        state[key] = button.dataset.value;
+        addLog(`Prototype control: ${key}`, `Switched ${key} to ${button.dataset.value}.`);
+        renderAll();
+      });
+    });
+
+    document.addEventListener("click", (event) => {
+      const panelToggle = event.target.closest("[data-panel-toggle]");
+      if (panelToggle) {
+        const panel = panelToggle.dataset.panelToggle;
+        state.collapsedPanels[panel] = true;
+        addLog("Side panel hidden", `${sidePanels[panel].label} panel collapsed into side dock.`);
+        renderAll();
+        return;
+      }
+
+      const panelRestore = event.target.closest("[data-panel-restore]");
+      if (panelRestore) {
+        const panel = panelRestore.dataset.panelRestore;
+        state.collapsedPanels[panel] = false;
+        addLog("Side panel restored", `${sidePanels[panel].label} panel restored from side dock.`);
+        renderAll();
+        return;
+      }
+
+      const agentButton = event.target.closest("[data-agent]");
+      if (agentButton) {
+        const agentId = agentButton.dataset.agent;
+        if (artifactContent[agentId]) {
+          state.selectedAgent = agentId;
+          addLog("Artifact selected", `${agentId} artifact opened in viewer.`);
+          renderAll();
+        }
+      }
+
+      const artifactButton = event.target.closest("[data-artifact-agent]");
+      if (artifactButton) {
+        state.selectedAgent = artifactButton.dataset.artifactAgent;
+        addLog("Artifact tab selected", `${state.selectedAgent} artifact opened.`);
+        renderAll();
+      }
+
+      const fileButton = event.target.closest("[data-file]");
+      if (fileButton) {
+        state.selectedFile = fileButton.dataset.file;
+        addLog("File selected", `${state.selectedFile} opened.`);
+        renderAll();
+      }
+
+      const decision = event.target.closest("[data-decision]");
+      if (decision) {
+        const value = decision.dataset.decision;
+        if (value === "frontend") {
+          state.selectedAgent = "backend";
+          setScenario("running", "CTO chose frontend as source of truth. Backend AgentRun will rerun.");
+          addLog("Backend AgentRun retried for conflict resolution", "Retry context: align_to_frontend.");
+          addLog("Human CTO selected align_to_frontend", "Frontend API usage is treated as source of truth.");
+          renderAll();
+          toast("已模拟：以前端为准，创建 Backend conflict_resolution AgentRun。");
+        } else if (value === "backend") {
+          state.selectedAgent = "frontend";
+          setScenario("running", "CTO chose backend as source of truth. Frontend AgentRun will rerun.");
+          addLog("Frontend AgentRun retried for conflict resolution", "Retry context: align_to_backend.");
+          addLog("Human CTO selected align_to_backend", "Backend routes are treated as source of truth.");
+          renderAll();
+          toast("已模拟：以后端为准，创建 Frontend conflict_resolution AgentRun。");
+        } else {
+          setScenario("completed", "CTO forced pass; QA stage completed in prototype.");
+          addLog("ZIP export preflight passed", "Forced pass path produced a simulated export manifest.");
+          addLog("QA AgentRun completed", "QA accepted forced contract decision for prototype demo.");
+          addLog("Human CTO selected force_pass", "Conflict was closed without rerunning Frontend or Backend.");
+          renderAll();
+          toast("已模拟：强制通过并进入 completed。");
+        }
+      }
+
+      if (event.target.closest("[data-review-action='approve']")) {
+        setScenario("running", "ReviewGate approved by CTO.");
+        toast("已模拟：审核通过，继续 BuildRun。");
+      }
+
+      if (event.target.closest("[data-review-action='request']")) {
+        setScenario("running", "CTO requested manual rerun for current AgentRun.");
+        toast("已模拟：创建 manual_rerun AgentRun。");
+      }
+
+      if (event.target.closest("[data-export]")) {
+        addLog("ZIP export preflight passed", "Download ZIP action triggered in prototype.");
+        renderAll();
+        toast("模拟下载：ZIP 包含 prd、architecture、frontend、backend、qa_report。");
+      }
+
+      if (event.target.closest("[data-export-disabled]")) {
+        addLog("Export blocked", "ZIP preflight is pending until QA completes.");
+        renderAll();
+        toast("ZIP 尚未解锁：需要 completed 场景。");
+      }
+
+      if (event.target.closest("[data-failure='rerun']")) {
+        setScenario("running", "New BuildRun created after failed run.");
+        toast("已模拟：失败后创建新的 BuildRun。");
+      }
+
+      if (event.target.closest("[data-failure='inspect']")) {
+        state.selectedAgent = "backend";
+        addLog("Inspect failed AgentRun", "Opened Backend attempt with generation_invalid.");
+        renderAll();
+        toast("已打开失败 AgentRun 的 Backend artifact。");
+      }
+
+      if (event.target.closest("#quickConflict")) {
+        setScenario("conflict", "Developer shortcut triggered conflict state.");
+      }
+
+      if (event.target.closest("#quickReview")) {
+        setScenario("review", "Developer shortcut triggered review state.");
+      }
+    });
+
+    qs("#focusStage").addEventListener("click", () => {
+      state.collapsedPanels.projects = true;
+      state.collapsedPanels.artifact = true;
+      state.collapsedPanels.logs = true;
+      addLog("Focus mode enabled", "Brief, Evidence and Logs collapsed; Pipeline and Decision remain visible.");
+      renderAll();
+      toast("已聚焦主舞台：辅助面板已收起到右侧 dock。");
+    });
+
+    qs("#simulateBuild").addEventListener("click", () => {
+      const hasConflict = qs("#forceConflict").checked;
+      const needsReview = qs("#reviewRequired").checked;
+      state.scenario = hasConflict ? "conflict" : needsReview ? "review" : "completed";
+      state.selectedAgent = hasConflict ? "frontend" : needsReview ? "architect" : "qa";
+      addLog("Simulated BuildRun", `provider=${qs("#providerMode").value}, force_api_conflict=${hasConflict}, human_review_required=${needsReview}.`);
+      renderAll();
+      toast("已按当前开关模拟一轮 BuildRun。");
+    });
+
+    qs("#startBuild").addEventListener("click", () => {
+      state.scenario = "running";
+      state.stageIndex = 0;
+      addLog("Start BuildRun clicked", `Project ${qs("#projectName").value || "Untitled"} started with provider=${qs("#providerMode").value}.`);
+      renderAll();
+      toast("已模拟创建 BuildRun 和 PM AgentRun。");
+    });
+
+    qs("#nextStage").addEventListener("click", () => {
+      if (state.scenario !== "running") {
+        setScenario("running", "Next stage requires running scenario.");
+        return;
+      }
+      state.stageIndex += 1;
+      if (state.stageIndex === 2 && qs("#reviewRequired").checked) {
+        state.scenario = "review";
+        state.selectedAgent = "architect";
+        addLog("ReviewGate opened", "human_review_required=true after Architect artifact generation.");
+      } else if (state.stageIndex >= 5) {
+        state.scenario = "completed";
+        state.selectedAgent = "qa";
+        addLog("ZIP export preflight passed", "All stages completed in prototype.");
+        addLog("QA AgentRun completed", "qa_report.md generated.");
+      } else if (state.stageIndex === 4 && qs("#forceConflict").checked) {
+        state.scenario = "conflict";
+        addLog("ContractChecker found 2 API mismatches", "Mismatch detected because force_api_conflict=true.");
+      } else {
+        addLog("Scheduler advanced", `Moved to stage index ${state.stageIndex}.`);
+      }
+      renderAll();
+    });
+
+    qs("#resetPrototype").addEventListener("click", () => {
+      state.layout = "command";
+      state.pipeline = "stepper";
+      state.artifact = "tree";
+      state.scenario = "conflict";
+      state.selectedAgent = "frontend";
+      state.selectedFile = "frontend/src/api.ts";
+      state.stageIndex = 3;
+      state.collapsedPanels.projects = false;
+      state.collapsedPanels.artifact = false;
+      state.collapsedPanels.logs = false;
+      state.logs = [...baseLogs];
+      renderAll();
+      toast("已重置为推荐组合：A 主舞台 + 阶段条 + 文件树 + 冲突。");
+    });
+
+    ["topProviderMode", "topForceConflict", "topReviewRequired"].forEach((id) => {
+      qs(`#${id}`).addEventListener("change", () => syncRuntimeControls("top"));
+    });
+
+    ["providerMode", "forceConflict", "reviewRequired"].forEach((id) => {
+      qs(`#${id}`).addEventListener("change", () => syncRuntimeControls("form"));
+    });
+
+    ["projectName"].forEach((id) => {
+      qs(`#${id}`).addEventListener("input", renderMeta);
+      qs(`#${id}`).addEventListener("change", renderMeta);
+    });
+
+    renderAll();
+  </script>
+</body>
+</html>
