@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Software Company MVP v0.1</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./styles.css">
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <h1>AI Software Company</h1>
+        <p>Human CTO command center for multi-agent software delivery.</p>
+      </div>
+      <div class="top-controls">
+        <button id="focusStageBtn">聚焦主舞台</button>
+        <button id="refreshBtn">刷新</button>
+        <a class="doc-link" href="/api/health" target="_blank" rel="noreferrer">health</a>
+      </div>
+    </header>
+
+    <section class="status-strip" id="statusStrip">
+      <span class="tag">Mock default</span>
+      <span class="tag">SQLite state</span>
+      <span class="tag">ArtifactHarness</span>
+      <span class="tag">ContractChecker</span>
+    </section>
+
+    <aside id="panelDock" class="panel-dock"></aside>
+
+    <section id="workspace" class="workspace">
+      <aside class="panel brief-panel" data-panel="brief">
+        <header class="panel-header">
+          <div>
+            <h2>Project Brief</h2>
+            <span>Create project / start BuildRun</span>
+          </div>
+          <button class="icon-button" data-collapse="brief" title="隐藏 Brief">
+            <span class="side-panel-icon"></span>
+          </button>
+        </header>
+        <div class="panel-body">
+          <form id="projectForm" class="stack">
+            <label>
+              项目名称
+              <input id="projectName" value="排课系统">
+            </label>
+            <label>
+              需求描述
+              <textarea id="requirementText">为教务人员设计一个排课系统，支持课程管理、教师排班、教室资源冲突检测、学生课表查看。</textarea>
+            </label>
+            <div class="grid-2">
+              <label>
+                Provider
+                <select id="providerMode">
+                  <option value="mock">Mock</option>
+                  <option value="llm">LLM</option>
+                </select>
+              </label>
+              <label>
+                Context
+                <select id="contextPolicy">
+                  <option value="fresh">fresh</option>
+                  <option value="inherit_project_input">inherit input</option>
+                  <option value="inherit_selected_artifacts">inherit selected</option>
+                </select>
+              </label>
+            </div>
+            <div id="providerBlocker" class="config-blocker" hidden></div>
+            <label class="checkline">
+              <input id="forceConflict" type="checkbox" checked>
+              force_api_conflict
+            </label>
+            <label class="checkline">
+              <input id="reviewRequired" type="checkbox" checked>
+              human_review_required
+            </label>
+            <div class="grid-2">
+              <button id="createProjectBtn" type="button">创建 Project</button>
+              <button id="startBuildBtn" type="button" class="primary">Start BuildRun</button>
+            </div>
+          </form>
+
+          <section class="project-list" id="projectList"></section>
+        </div>
+      </aside>
+
+      <section class="panel pipeline-panel">
+        <header class="panel-header">
+          <div>
+            <h2>BuildRun Pipeline</h2>
+            <span>PM -> Architect -> FE/BE parallel -> Contract Check -> QA</span>
+          </div>
+          <div class="panel-actions">
+            <span id="buildStatus" class="status-pill">draft</span>
+          </div>
+        </header>
+        <div class="panel-body">
+          <div id="pipeline" class="pipeline"></div>
+        </div>
+      </section>
+
+      <aside class="panel evidence-panel" data-panel="evidence">
+        <header class="panel-header">
+          <div>
+            <h2>Evidence</h2>
+            <span>latest artifact / manifest / harness report</span>
+          </div>
+          <button class="icon-button" data-collapse="evidence" title="隐藏 Evidence">
+            <span class="side-panel-icon right"></span>
+          </button>
+        </header>
+        <div class="panel-body">
+          <div id="artifactTabs" class="tabs"></div>
+          <div class="artifact-layout">
+            <nav id="fileTree" class="file-tree"></nav>
+            <section class="viewer">
+              <div class="viewer-title" id="viewerTitle">No artifact selected</div>
+              <div id="viewerContent" class="viewer-content code-view">Create a project and start a BuildRun.</div>
+            </section>
+          </div>
+        </div>
+      </aside>
+
+      <section class="panel decision-panel">
+        <header class="panel-header">
+          <div>
+            <h2>Human CTO Decision</h2>
+            <span>review gate / conflict resolution / export</span>
+          </div>
+        </header>
+        <div class="panel-body">
+          <div id="decisionArea" class="decision-stack"></div>
+        </div>
+      </section>
+
+      <aside class="panel logs-panel" data-panel="logs">
+        <header class="panel-header">
+          <div>
+            <h2>Event Logs</h2>
+            <span>append-only runtime evidence</span>
+          </div>
+          <button class="icon-button" data-collapse="logs" title="隐藏 Logs">
+            <span class="side-panel-icon bottom"></span>
+          </button>
+        </header>
+        <div class="panel-body">
+          <div id="logs" class="logs"></div>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+  <div id="blockerModal" class="blocker-modal" hidden>
+    <section class="blocker-dialog" role="dialog" aria-modal="true" aria-labelledby="blockerTitle">
+      <h2 id="blockerTitle">LLM 配置阻塞</h2>
+      <p id="blockerMessage"></p>
+      <pre id="blockerMissing"></pre>
+      <div class="action-row">
+        <button id="switchMockBtn" class="primary" type="button">切回 Mock 模式</button>
+        <button id="closeBlockerBtn" type="button">关闭</button>
+      </div>
+    </section>
+  </div>
+</body>
+</html>
