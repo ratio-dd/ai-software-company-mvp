@@ -15,7 +15,9 @@ Web UI
        -> MockProvider
        -> OpenAICompatibleProvider
   -> ArtifactHarness
+  -> ConflictScenarioHarness
   -> ContractChecker
+  -> RuntimeHarness
   -> Repository / ArtifactStore / EventLog
 ```
 
@@ -33,7 +35,9 @@ v0.1 exposes the smallest tool loop needed to complete the assignment safely:
 | `read_context` | Platform | Prepare role-scoped project, previous artifact, alignment, and conflict context. |
 | `propose_files` | Provider | Mock or LLM provider returns candidate files for the role. |
 | `run_harness` | Platform | Validate required files, repair deterministic structure, extract manifests. |
+| `run_conflict_scenario` | Platform | Deterministically inject the optional API mismatch demo scenario. |
 | `run_contract_check` | Platform | Compare Frontend API usages with Backend routes. |
+| `run_runtime_harness` | Platform | Start generated frontend/backend on assigned ports before QA and record smoke evidence. |
 | `export_artifacts` | Platform | Package latest valid artifacts into a downloadable ZIP. |
 
 This loop is enough to demonstrate multi-agent delivery while keeping execution
@@ -49,7 +53,7 @@ The following tools are not included in the evaluation build:
 - Repository checkout or branch mutation.
 - Internet access tools.
 - General filesystem read/write outside artifact bundles.
-- Autonomous generated-app test runner.
+- Browser-level generated-app visual QA.
 - Visual regression tools.
 - Long-running self-repair loops.
 
@@ -85,7 +89,7 @@ decide BuildRun status, Conflict status, retry exhaustion, or export readiness.
 | LLM provider | OpenAI-compatible chat completion | Multi-provider router, model policies, prompt registry |
 | Agent tools | Minimal platform-owned loop | Sandboxed shell, browser, package install, test runner |
 | Isolation | DB rows + per-AgentRun artifact folder | Per-Agent container or workspace sandbox |
-| Frontend validation | API usage extraction | Generated app smoke test and visual QA |
+| Frontend validation | API usage extraction + pre-QA process smoke | Browser visual QA and screenshot comparison |
 | API checking | Regex/manifest extraction | AST-level route and client extraction |
 | Repair | Retry by failure category | Multi-round repair loop with bounded tool budget |
 | Scheduling | In-process calls and FE/BE threads | Durable queue, resumable workers, cancellation |
@@ -123,6 +127,7 @@ The evaluation build demonstrates the engineering backbone:
 - role-oriented AgentRun attempts,
 - BuildRun as a full session,
 - deterministic ArtifactHarness gates,
+- platform-owned deterministic conflict scenario and runtime smoke gates,
 - conflict as business state rather than failure,
 - human CTO decision points,
 - explicit Mock/LLM provider switch,

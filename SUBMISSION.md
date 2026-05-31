@@ -56,11 +56,17 @@ Recommended flow:
   - `read_context`
   - `propose_files`
   - `run_harness`
+  - `run_conflict_scenario`
   - `run_contract_check`
+  - `run_runtime_harness`
   - `export_artifacts`
 - ArtifactHarness validation, deterministic repair, manifest extraction, and
   harness reports.
+- ConflictScenarioHarness deterministic mismatch injection for the demo switch,
+  so the conflict path does not rely on LLM behavior.
 - Frontend/Backend API mismatch detection.
+- RuntimeHarness pre-QA smoke check that starts generated frontend/backend and
+  records `runtime_report`.
 - Human CTO review and conflict resolution decisions.
 - ZIP export with generated frontend/backend artifacts.
 - Playwright E2E coverage for Mock flow, LLM missing-config blocker, conflict
@@ -89,7 +95,7 @@ The following areas are documented as extension points but are not fully
 implemented in this evaluation build:
 
 - Sandboxed shell execution.
-- Browser automation tools for generated apps.
+- Browser visual QA tools for generated apps.
 - Package installation tools.
 - Repository checkout or multi-repo editing.
 - Autonomous multi-round repair loops.

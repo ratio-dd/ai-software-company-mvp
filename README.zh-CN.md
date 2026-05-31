@@ -14,7 +14,7 @@ English version: [README.md](./README.md)
 
 建议从 [SUBMISSION.md](./SUBMISSION.md) 开始看，它说明了推荐验收路径、已实现范围和评估版本边界。
 
-生产级 Agent 工具能力，例如沙箱 Shell、浏览器自动化、包安装、生成应用 smoke runner、自动修复循环等，已作为明确扩展点记录在 [docs/production-extension-points.md](./docs/production-extension-points.md)。本版本保留这些工程边界，但不把它们做成可直接复用的生产平台。
+生产级 Agent 工具能力，例如沙箱 Shell、浏览器自动化、包安装、浏览器级生成应用 QA、自动修复循环等，已作为明确扩展点记录在 [docs/production-extension-points.md](./docs/production-extension-points.md)。本版本保留这些工程边界，但不把它们做成可直接复用的生产平台。
 
 ## 启动
 
@@ -66,7 +66,9 @@ Web UI
        -> MockProvider
        -> OpenAICompatibleProvider
   -> ArtifactHarness
+  -> ConflictScenarioHarness
   -> ContractChecker
+  -> RuntimeHarness
   -> Repository / ArtifactStore / EventLog
 ```
 
@@ -88,14 +90,16 @@ Web UI
 2. Architect Agent 生成 `architecture.md` 和 `api-contract.json`。
 3. 如果开启 `human_review_required`，BuildRun 暂停等待 Human CTO 审核。
 4. Frontend 和 Backend AgentRun 并行执行。
-5. ContractChecker 对比 Frontend API usages 和 Backend routes。
-6. 如果存在 mismatch，项目进入 `conflict`，等待 Human CTO 决策。
-7. Conflict 决策：
+5. 如果开启 `force_api_conflict` 且生成产物本身没有 mismatch，ConflictScenarioHarness 会确定性改写最新 Frontend artifact，制造一个可审计的 API mismatch。
+6. ContractChecker 对比 Frontend API usages 和 Backend routes。
+7. 如果存在 mismatch，项目进入 `conflict`，等待 Human CTO 决策。
+8. Conflict 决策：
    - `以前端为准`：重跑 Backend Agent，使用 `alignment_mode=align_to_frontend`。
    - `以后端为准`：重跑 Frontend Agent，使用 `alignment_mode=align_to_backend`。
    - `强制通过`：跳过重跑，继续进入 QA。
-8. QA Agent 生成 `qa_report.md`。
-9. ZIP 导出会打包最新有效产物。
+9. RuntimeHarness 在 QA 前启动最新 generated frontend/backend。
+10. QA Agent 生成 `qa_report.md`。
+11. ZIP 导出会打包最新有效产物。
 
 可重试失败会在同一个 BuildRun 内创建新的 AgentRun attempt；只有 retry 耗尽后 BuildRun 才会进入 failed。
 
@@ -107,6 +111,8 @@ ArtifactHarness 会提取：
 - Backend 代码中的 route 声明和 route schema hints。
 
 ContractChecker 对比 method、path 和 request keys。发现 mismatch 后，Human CTO 决策面板会显示结构化冲突行，并高亮冲突项。解决后的 conflict 会保留原始 Frontend/Backend attempt，并在需要重跑时记录对应的 resolution AgentRun。
+
+冲突演示开关由平台控制，不依赖 LLM “自觉”生成错误。需要制造冲突时，ConflictScenarioHarness 会创建新的 frontend artifact 版本，并在 harness report 中记录改写证据。
 
 ## 演示路径
 
@@ -131,13 +137,15 @@ ContractChecker 对比 method、path 和 request keys。发现 mismatch 后，Hu
 - 默认完整可跑的 MockProvider。
 - 显式 Mock/LLM provider 切换。LLM 模式使用 OpenAI-compatible chat completions endpoint；缺少必需环境变量时会以 `provider_config` 明确失败，不会静默 fallback 到 Mock。
 - ArtifactHarness：必需文件检查、确定性 repair、manifest 提取、harness report。
+- ConflictScenarioHarness：在演示开关开启时确定性注入 API mismatch。
 - Frontend/Backend API ContractChecker。
+- RuntimeHarness：QA 前启动 generated frontend/backend，记录 `runtime_report`。
 - Conflict 作为业务状态，而不是 failed 状态。
 - 可重试 AgentRun 失败会在同一个 BuildRun 内创建新 attempt。
 - Human CTO review gate 和 conflict decision。
 - SQLite metadata state。
 - 本地文件系统 artifact store。
-- ZIP 导出，包含 `prd.md`、`architecture.md`、`api-contract.json`、`frontend/`、`backend/` 和 `qa_report.md`。
+- ZIP 导出，包含 `prd.md`、`architecture.md`、`api-contract.json`、`frontend/`、`backend/`、`runtime_report` 和 `qa_report.md`。
 
 PDF 原始要求到当前实现的对照见 [docs/assignment-gap-analysis.md](./docs/assignment-gap-analysis.md)。
 
@@ -173,7 +181,7 @@ LLM_MODEL=deepseek-v4-flash
 
 配置后，平台会调用 `${LLM_BASE_URL}/chat/completions`，并期待模型返回形如 `{"files": {"relative/path": "content"}}` 的 JSON。选择 LLM 但缺少配置时，BuildRun 会以 `provider_config` 阻塞失败，不会自动切回 Mock。
 
-LLM 模式不会给模型任意工具权限。v0.1 只暴露平台控制的最小工具边界：`read_context`、`propose_files`、`run_harness`、`run_contract_check`、`export_artifacts`。Shell、浏览器、包安装、仓库访问、自动修复工具等都是生产扩展点，不属于此评估版本的直接交付范围。
+LLM 模式不会给模型任意工具权限。v0.1 只暴露平台控制的最小工具边界：`read_context`、`propose_files`、`run_harness`、`run_conflict_scenario`、`run_contract_check`、`run_runtime_harness`、`export_artifacts`。Shell、浏览器、包安装、仓库访问、自动修复工具等都是生产扩展点，不属于此评估版本的直接交付范围。
 
 ## E2E 测试
 

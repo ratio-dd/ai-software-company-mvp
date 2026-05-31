@@ -67,7 +67,9 @@ Web UI
        -> MockProvider
        -> OpenAICompatibleProvider
   -> ArtifactHarness
+  -> ConflictScenarioHarness
   -> ContractChecker
+  -> RuntimeHarness
   -> Repository / ArtifactStore / EventLog
 ```
 
@@ -91,15 +93,19 @@ The implemented flow is:
 2. Architect Agent creates `architecture.md` and `api-contract.json`.
 3. If `human_review_required` is enabled, the build pauses for CTO approval.
 4. Frontend and Backend AgentRuns execute in parallel threads.
-5. ContractChecker compares Frontend API usages with Backend routes.
-6. If mismatches exist, the project enters `conflict` and waits for CTO
+5. If `force_api_conflict` is enabled and generation did not already produce a
+   mismatch, ConflictScenarioHarness deterministically rewrites the latest
+   Frontend artifact to create an API mismatch.
+6. ContractChecker compares Frontend API usages with Backend routes.
+7. If mismatches exist, the project enters `conflict` and waits for CTO
    decision.
-7. Conflict decisions:
+8. Conflict decisions:
    - `以前端为准`: rerun Backend Agent with `alignment_mode=align_to_frontend`.
    - `以后端为准`: rerun Frontend Agent with `alignment_mode=align_to_backend`.
    - `强制通过`: skip rerun and continue to QA.
-8. QA Agent creates `qa_report.md`.
-9. ZIP export packages the latest valid artifacts.
+9. RuntimeHarness starts the latest generated frontend/backend before QA.
+10. QA Agent creates `qa_report.md`.
+11. ZIP export packages the latest valid artifacts.
 
 Retryable failures create a new AgentRun attempt inside the same BuildRun before
 the BuildRun is marked failed.
@@ -116,6 +122,10 @@ ContractChecker compares method, path, and request keys. Open mismatches are
 shown in the Human CTO decision panel with red-highlighted rows and decision
 buttons. Resolved conflicts preserve the original Frontend/Backend attempts and
 record the resolution AgentRun when a rerun occurs.
+
+The conflict demo switch is platform-owned. LLM output is not trusted to create
+the scenario; when needed, ConflictScenarioHarness creates a new frontend
+artifact version with an auditable harness report.
 
 ## Demo Path
 
@@ -140,13 +150,15 @@ record the resolution AgentRun when a rerun occurs.
 - MockProvider as the default complete path.
 - Explicit Mock/LLM provider dispatch. LLM mode uses an OpenAI-compatible chat completions endpoint when configured, and fails with `provider_config` when required env vars are missing.
 - ArtifactHarness for required files, deterministic repair, manifest extraction, and harness reports.
+- ConflictScenarioHarness for deterministic API mismatch injection when the demo switch is enabled.
 - Frontend/Backend API ContractChecker.
+- RuntimeHarness that starts generated frontend/backend on assigned ports before QA and records `runtime_report`.
 - Conflict as a business state, not a failed state.
 - Retryable AgentRun failures create a new `AgentRun` attempt in the same BuildRun before the BuildRun is marked failed.
 - Human CTO review gate and conflict decision.
 - SQLite metadata state.
 - Local filesystem artifact store.
-- ZIP export with `prd.md`, `architecture.md`, `api-contract.json`, `frontend/`, `backend/`, and `qa_report.md`.
+- ZIP export with `prd.md`, `architecture.md`, `api-contract.json`, `frontend/`, `backend/`, `runtime_report`, and `qa_report.md`.
 
 For the explicit PDF-to-implementation mapping, see
 [docs/assignment-gap-analysis.md](./docs/assignment-gap-analysis.md).
@@ -183,7 +195,7 @@ LLM_MODEL=deepseek-v4-flash
 
 When configured, the platform calls `${LLM_BASE_URL}/chat/completions` and expects JSON shaped as `{"files": {"relative/path": "content"}}`. Selecting LLM with missing config fails with `provider_config`; it never falls back to Mock.
 
-LLM mode does not grant arbitrary tools to the model. v0.1 uses a minimal platform-owned tool loop: `read_context`, `propose_files`, `run_harness`, `run_contract_check`, and `export_artifacts`. Shell, browser, package installation, repository access, and autonomous repair tools are production extension points, not part of this evaluation build.
+LLM mode does not grant arbitrary tools to the model. v0.1 uses a minimal platform-owned tool loop: `read_context`, `propose_files`, `run_harness`, `run_conflict_scenario`, `run_contract_check`, `run_runtime_harness`, and `export_artifacts`. Shell, browser, package installation, repository access, and autonomous repair tools are production extension points, not part of this evaluation build.
 
 ## E2E Tests
 

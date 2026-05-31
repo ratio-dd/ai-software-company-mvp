@@ -24,6 +24,8 @@ The current MVP covers the assignment's primary requirements:
 - ZIP export,
 - OpenAI-compatible LLM provider path,
 - no-key Mock demo path,
+- deterministic platform-owned conflict injection,
+- pre-QA runtime smoke for generated frontend/backend,
 - README and architecture documentation.
 
 The remaining gaps are mostly deliberate boundaries:
@@ -47,7 +49,7 @@ The remaining gaps are mostly deliberate boundaries:
 | Frontend Agent generates frontend page code | Covered | `frontend/README.md`, `frontend/server.py`, `frontend/index.html`, `frontend/src/app.js` | Static HTML + JS, allowed by PDF's React/HTML + JS wording. |
 | Backend Agent generates API implementation | Covered | `backend/README.md`, `backend/server.py` | Python stdlib API server. |
 | QA Agent outputs Markdown test plan/report | Covered | `qa_report.md` | Generated and exported after conflict resolution. |
-| PM -> Architect -> parallel FE/BE -> contract check -> QA | Covered | `run_initial_until_pause_or_done`, `run_parallel_agents`, `run_contract_check`, `run_qa_and_complete` | FE/BE are scheduled in parallel threads. |
+| PM -> Architect -> parallel FE/BE -> optional scenario injection -> contract check -> runtime smoke -> QA | Covered | `run_initial_until_pause_or_done`, `run_parallel_agents`, `maybe_inject_conflict_scenario`, `run_contract_check`, `run_qa_and_complete` | FE/BE are scheduled in parallel threads; runtime smoke blocks QA on process/route failure. |
 | Detect Frontend/Backend API mismatch | Covered | `ArtifactHarness.extract_frontend_usages`, `extract_backend_routes`, `ContractChecker.compare` | Compares method, path, and request keys. |
 | Enter `conflict` state when mismatch exists | Covered | `conflicts` table, project status `conflict` | Conflict is modeled as business state, not failed state. |
 | Show conflict points in project detail page | Covered | `renderDecision` mismatch table | Mismatch rows are red-highlighted in the decision panel. |
@@ -65,13 +67,13 @@ The remaining gaps are mostly deliberate boundaries:
 | Conflict area only visible in conflict state | Covered | `renderDecision` | Conflict panel appears only for open conflict. |
 | Red-highlighted differences | Covered | `.conflict-card`, `.mismatch-row.issue` | Added explicit red visual treatment. |
 | Logs in reverse chronological order, collapsible | Covered | `renderLogs`, Logs dock | Current query returns newest first and the panel is collapsible. |
-| ZIP export after completion | Covered | `/api/build-runs/{id}/export` | Packages latest PM, architecture, frontend, backend, QA artifacts. |
-| ZIP contains `prd.md`, `architecture.md`, `frontend/`, `backend/`, `qa_report.md` | Covered | `export_zip` and E2E export test | Also includes `api-contract.json`. |
+| ZIP export after completion | Covered | `/api/build-runs/{id}/export` | Packages latest PM, architecture, frontend, backend, runtime, and QA artifacts. |
+| ZIP contains `prd.md`, `architecture.md`, `frontend/`, `backend/`, `qa_report.md` | Covered | `export_zip` and E2E export test | Also includes `api-contract.json` and `runtime_report`. |
 | LLM mode through OpenAI-compatible API | Covered | `OpenAICompatibleProvider` | Requires `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`. |
 | Mock mode must run without LLM key | Covered | `MockProvider`, default provider | E2E verifies no-key path. |
 | "未配置 API Key 时自动进入 Mock" | Partial | UI default is Mock; LLM missing config blocks explicitly | This is a deliberate user-approved deviation: no silent fallback when LLM is explicitly selected. |
 | Mock content dynamically uses project name/requirement | Covered | `MockProvider.run` | Project name and requirement are interpolated into generated artifacts. |
-| Mock conflict scenario | Covered | `force_api_conflict` | Toggleable in UI and API. |
+| Mock conflict scenario | Covered | `force_api_conflict`, `ConflictScenarioHarness` | Toggleable in UI and API; mismatch is injected by platform, not trusted to provider randomness. |
 | Example scheduling system flow | Covered | Default Brief is a scheduling system | Generated frontend/backend and tests use scheduling examples. |
 | Full source code with clear README | Covered | `README.md`, `SUBMISSION.md`, docs | README now includes architecture, orchestration, conflict detection, env, dev/test steps. |
 | `docker-compose.yml` one-command start | Covered | `docker-compose.yml` | `docker-compose up --build`. |
@@ -100,10 +102,11 @@ infrastructure:
    - Extension: in-browser artifact editor with audit trail and revalidation.
 
 4. **Generated app QA**
-   - Current: artifact harness, contract check, export test, and a smoke test
-     during development.
-   - Extension: integrated generated app runner, browser visual QA, screenshot
-     comparison.
+   - Current: artifact harness, contract check, export test, and pre-QA
+     RuntimeHarness that starts generated frontend/backend and smokes backend
+     routes.
+   - Extension: browser visual QA, screenshot comparison, richer generated-app
+     integration tests.
 
 5. **OpenAPI fidelity**
    - Current: compact JSON API contract sufficient for route comparison.
