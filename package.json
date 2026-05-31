@@ -1,0 +1,12 @@
+{
+  "name": "jing-an-agent-task",
+  "version": "0.1.0",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE-EVALUATION.md",
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}
