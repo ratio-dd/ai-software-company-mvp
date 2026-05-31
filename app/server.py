@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import http.client
 import json
 import os
 import re
@@ -164,7 +165,7 @@ class ProviderGenerationError(ProviderError):
 class AgentProvider:
     name = "base"
 
-    def run(self, project, build_run, role, previous, alignment_mode="none", conflict=None):
+    def run(self, project, build_run, role, previous, alignment_mode="none", conflict=None, retry_hint=None):
         raise NotImplementedError
 
 
@@ -396,7 +397,7 @@ store = ArtifactStore()
 class MockProvider(AgentProvider):
     name = "mock"
 
-    def run(self, project, build_run, role, previous, alignment_mode="none", conflict=None):
+    def run(self, project, build_run, role, previous, alignment_mode="none", conflict=None, retry_hint=None):
         name = project["name"]
         requirement = project["requirement"]
         if role == "pm":
@@ -683,7 +684,7 @@ class OpenAICompatibleProvider(AgentProvider):
         "qa": ["qa_report.md"],
     }
 
-    def run(self, project, build_run, role, previous, alignment_mode="none", conflict=None):
+    def run(self, project, build_run, role, previous, alignment_mode="none", conflict=None, retry_hint=None):
         config = llm_config_status()
         if not config["configured"]:
             raise ProviderConfigError(f"LLM config missing: {', '.join(config['missing'])}")
@@ -700,7 +701,7 @@ class OpenAICompatibleProvider(AgentProvider):
                 },
                 {
                     "role": "user",
-                    "content": self.prompt(project, build_run, role, previous, alignment_mode, conflict),
+                    "content": self.prompt(project, build_run, role, previous, alignment_mode, conflict, retry_hint),
                 },
             ],
             "temperature": 0.2,
@@ -727,7 +728,7 @@ class OpenAICompatibleProvider(AgentProvider):
             if exc.code in (400, 401, 403, 404):
                 raise ProviderConfigError(f"LLM request failed with HTTP {exc.code}: {error_body}") from exc
             raise ProviderError(f"LLM request failed with HTTP {exc.code}: {error_body}", category="unknown", retryable=False) from exc
-        except (TimeoutError, urllib.error.URLError) as exc:
+        except (TimeoutError, urllib.error.URLError, http.client.IncompleteRead, http.client.RemoteDisconnected) as exc:
             raise ProviderTransientError(f"LLM request transient failure: {exc}") from exc
 
         content = self.message_content(body)
@@ -741,13 +742,15 @@ class OpenAICompatibleProvider(AgentProvider):
             return base_url
         return f"{base_url}/chat/completions"
 
-    def prompt(self, project, build_run, role, previous, alignment_mode, conflict):
+    def prompt(self, project, build_run, role, previous, alignment_mode, conflict, retry_hint):
         required = ", ".join(self.REQUIRED_FILES.get(role, []))
         previous_preview = "\n\n".join(
             f"## {artifact['type']} v{artifact['version']}\n{artifact.get('content_preview') or ''}"
             for artifact in previous[-5:]
         )[:5000]
         conflict_text = json_dumps(conflict) if conflict else "none"
+        role_contract = self.role_contract(role)
+        api_policy = self.api_policy(role, bool(build_run["force_api_conflict"]), alignment_mode)
         return f"""Project: {project['name']}
 
 Requirement:
@@ -758,6 +761,13 @@ Required files: {required}
 Alignment mode: {alignment_mode}
 Force API conflict scenario: {bool(build_run['force_api_conflict'])}
 Conflict context: {conflict_text}
+Retry hint from previous failed attempt: {retry_hint or 'none'}
+
+Role-specific artifact contract:
+{role_contract}
+
+API alignment policy:
+{api_policy}
 
 Previous artifacts:
 {previous_preview or 'none'}
@@ -765,11 +775,80 @@ Previous artifacts:
 Rules:
 - Return JSON only with shape {{"files": {{"path": "content"}}}}.
 - Include every required file for the role.
+- Use exactly the required relative paths unless the role-specific contract says otherwise.
 - Generated frontend and backend must be runnable with Python stdlib only.
 - Frontend must expose concrete API calls so the harness can extract usages.
 - Backend must expose concrete routes so the harness can extract routes.
 - Do not decide BuildRun state, Conflict state, or retry behavior; only return candidate files.
 """
+
+    def role_contract(self, role):
+        if role == "pm":
+            return """Create prd.md as Markdown.
+It must include these exact headings:
+## 产品目标
+## 目标用户
+## 核心功能列表
+## 用户故事
+## 验收标准
+## 非目标范围
+Use numbered items under 核心功能列表 so the harness can extract a feature manifest."""
+        if role == "architect":
+            return """Create architecture.md and api-contract.json.
+api-contract.json must be strict valid JSON with an endpoints array.
+The api-contract.json file content must use double quotes for every key and string value.
+Do not use JavaScript object literal syntax, Python dict syntax, comments, trailing commas, or markdown fences inside api-contract.json.
+Each endpoint should include method, path, summary, request, and response.
+Use concrete API paths such as /api/courses and /api/schedules/check-conflicts."""
+        if role == "frontend":
+            return """Create frontend/README.md, frontend/server.py, frontend/index.html, and frontend/src/app.js.
+frontend/src/app.js must contain literal fetch("/api/...") or fetch(apiUrl("/api/...")) calls.
+Follow the API alignment policy for the exact paths.
+For POST request schema extraction, include a mapping like "/api/schedules/check-conflicts": ["courseId", "teacherId"] or "/api/schedule/check": ["courseId", "teacherId"] in JavaScript.
+For the canonical non-conflict path, include concrete calls equivalent to:
+fetch("/api/courses")
+fetch("/api/teachers")
+fetch("/api/schedules/check-conflicts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ courseId: "c1", teacherId: "t1" }) })"""
+        if role == "backend":
+            return """Create backend/README.md and backend/server.py.
+backend/server.py must be runnable with Python stdlib only.
+Follow the API alignment policy for the exact paths.
+For route extraction, include literal tuples such as ("GET", "/api/courses") and ("POST", "/api/schedules/check-conflicts"), or the conflict-resolution paths when instructed.
+For POST request schema extraction, include a mapping like ("POST", "/api/schedules/check-conflicts"): ["courseId", "teacherId"] or ("POST", "/api/schedule/check"): ["courseId", "teacherId"] in Python."""
+        if role == "qa":
+            return """Create qa_report.md as Markdown.
+It must include these exact headings:
+## 测试范围
+## 测试用例
+## API契约验证
+## 冲突处理验证
+## 风险与结论"""
+        return "No additional contract."
+
+    def api_policy(self, role, force_conflict, alignment_mode):
+        canonical = (
+            'Canonical API set: GET /api/courses, GET /api/teachers, '
+            'POST /api/schedules/check-conflicts with request keys courseId and teacherId.'
+        )
+        if role == "architect":
+            return f"{canonical} Put this canonical API set in api-contract.json."
+        if role == "frontend":
+            if force_conflict and alignment_mode == "none":
+                return (
+                    "This is the intentional conflict scenario. Frontend must call "
+                    "GET /api/course-list and POST /api/schedule/check so ContractChecker can detect "
+                    "a frontend/backend API mismatch. Still include request keys courseId and teacherId "
+                    "for POST /api/schedule/check."
+                )
+            return f"{canonical} Frontend must call this canonical API set exactly."
+        if role == "backend":
+            if force_conflict and alignment_mode == "align_to_frontend":
+                return (
+                    "Resolve the conflict by aligning Backend to the Frontend mismatch. Backend must expose "
+                    "GET /api/course-list and POST /api/schedule/check with request keys courseId and teacherId."
+                )
+            return f"{canonical} Backend must expose this canonical API set exactly."
+        return canonical
 
     def message_content(self, body):
         try:
@@ -796,7 +875,12 @@ Rules:
             files = {item.get("path"): item.get("content", "") for item in files if isinstance(item, dict)}
         if not isinstance(files, dict) or not files:
             raise ProviderGenerationError("LLM response JSON must contain a non-empty files object")
-        return {ensure_safe_path(path): str(content) for path, content in files.items() if path}
+        normalized = {}
+        for path, content in files.items():
+            if not path:
+                continue
+            normalized[ensure_safe_path(path)] = content if isinstance(content, str) else json_dumps(content)
+        return normalized
 
 
 class ArtifactHarness:
@@ -925,31 +1009,31 @@ class ArtifactHarness:
                 usages.append(usage)
 
             patterns = [
-                r"fetch\(\s*[\"']([^\"']+)[\"'](?:\s*,\s*\{(?P<opts>.*?)\})?",
-                r"fetch\(\s*apiUrl\(\s*[\"']([^\"']+)[\"']\s*\)(?:\s*,\s*\{(?P<opts>.*?)\})?",
+                r"fetch\(\s*(?P<quote>[\"'`])(?P<path>[^\"'`]+)(?P=quote)(?:\s*,\s*\{(?P<opts>.*?)\})?",
+                r"fetch\(\s*apiUrl\(\s*(?P<quote>[\"'`])(?P<path>[^\"'`]+)(?P=quote)\s*\)(?:\s*,\s*\{(?P<opts>.*?)\})?",
             ]
             for pattern in patterns:
                 for match in re.finditer(pattern, content, flags=re.DOTALL):
                     opts = match.group("opts") or ""
-                    method_match = re.search(r"method\s*:\s*[\"']([A-Z]+)[\"']", opts)
-                    add_usage(method_match.group(1) if method_match else "GET", match.group(1))
-            for method, api_path in re.findall(r"axios\.(get|post|put|patch|delete)\(\s*(?:apiUrl\(\s*)?[\"']([^\"']+)[\"']", content, flags=re.IGNORECASE):
+                    method_match = re.search(r"method\s*:\s*[\"'`]([A-Z]+)[\"'`]", opts, flags=re.IGNORECASE)
+                    add_usage(method_match.group(1) if method_match else "GET", match.group("path"))
+            for method, api_path in re.findall(r"axios\.(get|post|put|patch|delete)\(\s*(?:apiUrl\(\s*)?[\"'`]([^\"'`]+)[\"'`]", content, flags=re.IGNORECASE):
                 add_usage(method, api_path)
             for match in re.finditer(r"axios\(\s*\{(?P<opts>.*?)\}\s*\)", content, flags=re.DOTALL):
                 opts = match.group("opts") or ""
-                url_match = re.search(r"(?:url|path)\s*:\s*[\"']([^\"']+)[\"']", opts)
+                url_match = re.search(r"(?:url|path)\s*:\s*[\"'`]([^\"'`]+)[\"'`]", opts)
                 if not url_match:
                     continue
-                method_match = re.search(r"method\s*:\s*[\"']([A-Z]+)[\"']", opts, flags=re.IGNORECASE)
+                method_match = re.search(r"method\s*:\s*[\"'`]([A-Z]+)[\"'`]", opts, flags=re.IGNORECASE)
                 add_usage(method_match.group(1) if method_match else "GET", url_match.group(1))
         return usages
 
     def extract_js_api_schemas(self, content):
         schemas = {}
-        for api_path, keys in re.findall(r"[\"']([^\"']+)[\"']\s*:\s*\[([^\]]*)\]", content):
+        for api_path, keys in re.findall(r"[\"'`]([^\"'`]+)[\"'`]\s*:\s*\[([^\]]*)\]", content):
             if not api_path.startswith("/"):
                 continue
-            parsed = re.findall(r"[\"']([^\"']+)[\"']", keys)
+            parsed = re.findall(r"[\"'`]([^\"'`]+)[\"'`]", keys)
             if parsed:
                 schemas[api_path] = parsed
         return schemas
@@ -1222,7 +1306,7 @@ class Orchestrator:
         repo.update("projects", build["project_id"], {"status": "completed", "updated_at": now_iso()})
         self.log(build["project_id"], build_id, None, "info", "build_run_completed", "BuildRun completed. ZIP export is available.")
 
-    def run_agent(self, build_id, role, trigger_reason="initial", alignment_mode="none", retry_of=None, resolves_conflict_id=None, conflict=None, retry_depth=0):
+    def run_agent(self, build_id, role, trigger_reason="initial", alignment_mode="none", retry_of=None, resolves_conflict_id=None, conflict=None, retry_depth=0, retry_hint=None):
         build = self.build(build_id)
         project = repo.row("SELECT * FROM projects WHERE id=?", (build["project_id"],))
         previous = self.previous_artifacts(build_id)
@@ -1250,7 +1334,7 @@ class Orchestrator:
         })
         self.log(project["id"], build_id, agent_id, "info", "agent_run_started", f"{role} AgentRun started, attempt_no={attempt_no}, trigger_reason={trigger_reason}.")
         try:
-            files = self.provider_for(build["provider_mode_actual"]).run(project, build, role, previous, alignment_mode=alignment_mode, conflict=conflict)
+            files = self.provider_for(build["provider_mode_actual"]).run(project, build, role, previous, alignment_mode=alignment_mode, conflict=conflict, retry_hint=retry_hint)
             result = harness.run(role, project, files)
         except ProviderError as exc:
             return self.handle_agent_failure(
@@ -1372,6 +1456,7 @@ class Orchestrator:
                 resolves_conflict_id=resolves_conflict_id,
                 conflict=conflict,
                 retry_depth=retry_depth + 1,
+                retry_hint=reason,
             )
         self.fail_build(build_id, category, reason)
         return repo.row("SELECT * FROM agent_runs WHERE id=?", (agent_id,))

@@ -164,6 +164,13 @@ LLM_BASE_URL=https://openai-compatible-host/v1
 LLM_MODEL=...
 ```
 
+已验证过的 DeepSeek 示例：
+
+```bash
+LLM_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-v4-flash
+```
+
 配置后，平台会调用 `${LLM_BASE_URL}/chat/completions`，并期待模型返回形如 `{"files": {"relative/path": "content"}}` 的 JSON。选择 LLM 但缺少配置时，BuildRun 会以 `provider_config` 阻塞失败，不会自动切回 Mock。
 
 LLM 模式不会给模型任意工具权限。v0.1 只暴露平台控制的最小工具边界：`read_context`、`propose_files`、`run_harness`、`run_contract_check`、`export_artifacts`。Shell、浏览器、包安装、仓库访问、自动修复工具等都是生产扩展点，不属于此评估版本的直接交付范围。

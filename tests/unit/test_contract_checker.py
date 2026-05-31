@@ -1,6 +1,6 @@
 import unittest
 
-from app.server import ArtifactHarness, ContractChecker
+from app.server import ArtifactHarness, ContractChecker, OpenAICompatibleProvider
 
 
 class ContractCheckerTest(unittest.TestCase):
@@ -41,6 +41,30 @@ ROUTE_SCHEMAS = {
         self.assertEqual(mismatches[0]["kind"], "request_keys_mismatch")
         self.assertEqual(mismatches[0]["frontend_keys"], ["courseId"])
         self.assertEqual(mismatches[0]["backend_keys"], ["courseId", "teacherId"])
+
+    def test_extracts_backtick_fetch_and_schema_literals(self):
+        harness = ArtifactHarness()
+        frontend_usages = harness.extract_frontend_usages({
+            "frontend/src/app.js": '''
+const API_SCHEMAS = {
+  `/api/schedule/check`: [`courseId`, `teacherId`]
+};
+fetch(apiUrl(`/api/schedule/check`), {
+  method: `post`,
+  body: JSON.stringify(payload)
+});
+'''
+        })
+
+        self.assertEqual(frontend_usages[0]["method"], "POST")
+        self.assertEqual(frontend_usages[0]["path"], "/api/schedule/check")
+        self.assertEqual(frontend_usages[0]["request_keys"], ["courseId", "teacherId"])
+
+    def test_llm_parse_files_preserves_nested_json_content(self):
+        provider = OpenAICompatibleProvider()
+        files = provider.parse_files('{"files":{"api-contract.json":{"endpoints":[{"method":"GET","path":"/api/courses"}]}}}')
+
+        self.assertEqual(files["api-contract.json"], '{\n  "endpoints": [\n    {\n      "method": "GET",\n      "path": "/api/courses"\n    }\n  ]\n}')
 
 
 if __name__ == "__main__":

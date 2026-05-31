@@ -174,6 +174,13 @@ LLM_BASE_URL=https://openai-compatible-host/v1
 LLM_MODEL=...
 ```
 
+DeepSeek smoke-tested example:
+
+```bash
+LLM_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-v4-flash
+```
+
 When configured, the platform calls `${LLM_BASE_URL}/chat/completions` and expects JSON shaped as `{"files": {"relative/path": "content"}}`. Selecting LLM with missing config fails with `provider_config`; it never falls back to Mock.
 
 LLM mode does not grant arbitrary tools to the model. v0.1 uses a minimal platform-owned tool loop: `read_context`, `propose_files`, `run_harness`, `run_contract_check`, and `export_artifacts`. Shell, browser, package installation, repository access, and autonomous repair tools are production extension points, not part of this evaluation build.
