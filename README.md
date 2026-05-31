@@ -32,6 +32,89 @@ Local Python-only start:
 python3 app/server.py --port 3000
 ```
 
+## Project Structure
+
+```text
+app/
+  server.py              # Python stdlib API server, orchestrator, providers, harness, export
+  static/                # CTO-facing Web UI
+docs/
+  production-extension-points.md
+  assignment-gap-analysis.md
+output/
+  requirements/          # requirement clarification and architecture design notes
+  pdf/                   # parsed PDF source material and page/diagram references
+  prototypes/            # earlier static UI prototype
+  reports/               # MVP verification report
+tests/
+  e2e/                   # Playwright flow and responsive layout tests
+  unit/                  # ContractChecker unit tests
+```
+
+## Architecture Overview
+
+The platform keeps orchestration state outside the model. PM, Architect,
+Frontend, Backend, and QA are represented as `AgentRun` attempts inside a
+`BuildRun` session. Each successful AgentRun emits an `Artifact`; raw provider
+output must pass through `ArtifactHarness` before it becomes a valid artifact.
+
+```text
+Web UI
+  -> OrchestratorService
+  -> AgentProvider
+       -> MockProvider
+       -> OpenAICompatibleProvider
+  -> ArtifactHarness
+  -> ContractChecker
+  -> Repository / ArtifactStore / EventLog
+```
+
+Core entities:
+
+- `Project`: user-facing container with current status and active BuildRun.
+- `BuildRun`: one full build session; retries and conflict resolution happen
+  inside it.
+- `AgentRun`: one role attempt with `attempt_no`, `trigger_reason`,
+  input/output artifact IDs, retry metadata, and optional conflict link.
+- `Artifact`: versioned generated output plus manifest and harness report.
+- `Conflict`: Frontend/Backend API mismatch business state, not a failed state.
+- `ReviewGate`: Human CTO approval point.
+- `LogEvent`: append-only runtime evidence.
+
+## Agent Orchestration Logic
+
+The implemented flow is:
+
+1. PM Agent creates `prd.md`.
+2. Architect Agent creates `architecture.md` and `api-contract.json`.
+3. If `human_review_required` is enabled, the build pauses for CTO approval.
+4. Frontend and Backend AgentRuns execute in parallel threads.
+5. ContractChecker compares Frontend API usages with Backend routes.
+6. If mismatches exist, the project enters `conflict` and waits for CTO
+   decision.
+7. Conflict decisions:
+   - `以前端为准`: rerun Backend Agent with `alignment_mode=align_to_frontend`.
+   - `以后端为准`: rerun Frontend Agent with `alignment_mode=align_to_backend`.
+   - `强制通过`: skip rerun and continue to QA.
+8. QA Agent creates `qa_report.md`.
+9. ZIP export packages the latest valid artifacts.
+
+Retryable failures create a new AgentRun attempt inside the same BuildRun before
+the BuildRun is marked failed.
+
+## Conflict Detection
+
+ArtifactHarness extracts:
+
+- Frontend API usages from `fetch(...)` / `axios(...)` calls and request key
+  comments/schema hints.
+- Backend routes from generated route declarations and route schema hints.
+
+ContractChecker compares method, path, and request keys. Open mismatches are
+shown in the Human CTO decision panel with red-highlighted rows and decision
+buttons. Resolved conflicts preserve the original Frontend/Backend attempts and
+record the resolution AgentRun when a rerun occurs.
+
 ## Demo Path
 
 1. Open the Web UI.
@@ -62,6 +145,9 @@ python3 app/server.py --port 3000
 - SQLite metadata state.
 - Local filesystem artifact store.
 - ZIP export with `prd.md`, `architecture.md`, `api-contract.json`, `frontend/`, `backend/`, and `qa_report.md`.
+
+For the explicit PDF-to-implementation mapping, see
+[docs/assignment-gap-analysis.md](./docs/assignment-gap-analysis.md).
 
 ## Data
 
@@ -101,3 +187,17 @@ npm run test:e2e
 ```
 
 By default the tests target `http://127.0.0.1:3000`; set `PLAYWRIGHT_BASE_URL` to test another running server. Without that override, the Playwright config starts `python3 app/server.py --port 3000` with a temporary `DATA_DIR`.
+
+## Local Development Checklist
+
+```bash
+python3 -m py_compile app/server.py
+node --check app/static/app.js
+node --check tests/e2e/mvp-flow.spec.js
+python3 -m unittest tests.unit.test_contract_checker
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 npm run test:e2e
+```
+
+The Playwright run covers Mock mode, LLM missing-config blocker, conflict
+resolution, ZIP export, artifact evidence, the minimal toolset boundary, and
+desktop/tablet/mobile overflow checks.

@@ -895,6 +895,11 @@ pre {
   background: var(--red-soft);
 }
 
+.state-card.conflict-card {
+  border-color: #f0a8a8;
+  background: linear-gradient(180deg, #fffafa 0%, var(--red-soft) 100%);
+}
+
 .config-blocker {
   border: 1px solid #e9b2b2;
   border-radius: 7px;
@@ -948,12 +953,26 @@ pre {
   border-bottom: 0;
 }
 
+.mismatch-row.issue {
+  background: #fff7f7;
+  box-shadow: inset 3px 0 0 var(--red);
+}
+
 .mismatch-cell {
   padding: 8px;
   border-right: 1px solid var(--line);
   font-size: 12px;
   overflow-wrap: anywhere;
   min-width: 0;
+}
+
+.mismatch-row.issue .mismatch-cell {
+  border-color: #f0c7c7;
+}
+
+.mismatch-row.issue .mismatch-cell:first-child {
+  color: #8f1f1f;
+  font-weight: 800;
 }
 
 .mismatch-cell:last-child {

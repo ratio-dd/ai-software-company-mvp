@@ -18,7 +18,8 @@ commercial use or internal tooling reuse. See
    Artifact, Conflict, and ReviewGate semantics.
 4. `output/requirements/artifact-harness-v0.1.md` for deterministic artifact
    validation and manifest extraction.
-5. `docs/production-extension-points.md` for intentional v0.1 boundaries and
+5. `docs/assignment-gap-analysis.md` for the PDF requirement coverage matrix.
+6. `docs/production-extension-points.md` for intentional v0.1 boundaries and
    production evolution points.
 
 ## Recommended Demo Path

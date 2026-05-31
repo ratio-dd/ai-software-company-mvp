@@ -1482,7 +1482,14 @@ class Handler(BaseHTTPRequestHandler):
                 "toolset": toolset_status(),
             })
         if method == "GET" and path == "/api/projects":
-            rows = repo.rows("SELECT * FROM projects ORDER BY created_at DESC")
+            rows = repo.rows(
+                """
+                SELECT p.*, b.stage AS active_stage, b.status AS build_status
+                FROM projects p
+                LEFT JOIN build_runs b ON p.active_build_run_id = b.id
+                ORDER BY p.created_at DESC
+                """
+            )
             return self.send_json({"projects": rows})
         if method == "POST" and path == "/api/projects":
             return self.send_json(orchestrator.create_project(self.read_json()))

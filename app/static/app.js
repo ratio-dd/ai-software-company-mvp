@@ -214,6 +214,7 @@ function renderProjects() {
         <span class="status-pill ${statusClass(project.status)}">${escapeHtml(project.status)}</span>
       </div>
       <div class="project-desc">active: ${escapeHtml(project.active_build_run_id || "none")}</div>
+      <div class="project-desc">stage: ${escapeHtml(project.active_stage || "not started")}</div>
     </button>
   `).join("");
 }
@@ -568,14 +569,14 @@ function renderDecision() {
       return `${route}${keys}` || fallback;
     };
     const rows = conflict.mismatches.map((item) => `
-      <div class="mismatch-row">
+      <div class="mismatch-row issue">
         <div class="mismatch-cell">${escapeHtml(item.kind || item.method)}${item.reason ? `<br><small>${escapeHtml(item.reason)}</small>` : ""}</div>
         <div class="mismatch-cell">${escapeHtml(side(item.frontend || item.frontend_path))}</div>
         <div class="mismatch-cell">${escapeHtml(side(item.backend || item.backend_path || item.backend_candidates))}</div>
       </div>
     `).join("");
     qs("#decisionArea").innerHTML = `
-      <section class="state-card">
+      <section class="state-card conflict-card">
         <h3>Conflict: FE/BE API mismatch</h3>
         <p>Conflict 是业务状态，不是 failed。它引用产生冲突的 Frontend/Backend AgentRun attempt。</p>
         <div class="mismatch-table">
