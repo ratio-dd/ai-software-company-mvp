@@ -89,6 +89,7 @@ decide BuildRun status, Conflict status, retry exhaustion, or export readiness.
 | LLM provider | OpenAI-compatible chat completion | Multi-provider router, model policies, prompt registry |
 | Agent tools | Minimal platform-owned loop | Sandboxed shell, browser, package install, test runner |
 | Isolation | DB rows + per-AgentRun artifact folder | Per-Agent container or workspace sandbox |
+| Contract format | Compact `api-contract.json` | Full OpenAPI schema generation and validation |
 | Frontend validation | API usage extraction + pre-QA process smoke | Browser visual QA and screenshot comparison |
 | API checking | Regex/manifest extraction | AST-level route and client extraction |
 | Repair | Retry by failure category | Multi-round repair loop with bounded tool budget |

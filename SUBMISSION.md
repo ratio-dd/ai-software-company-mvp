@@ -85,6 +85,10 @@ sandboxed agent runtime.
   repo checkout, or test runner tools.
 - Platform-owned deterministic tools run outside the LLM and remain controlled
   by the orchestrator.
+- `api-contract.json` is a compact platform-owned JSON contract for v0.1
+  method/path/request-key comparison. It is intentionally not a full OpenAPI
+  document; full OpenAPI schema generation and validation are documented
+  extension points.
 
 This boundary is intentional for the evaluation build. It keeps the submission
 auditable while preserving clear production extension points.

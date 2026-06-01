@@ -85,6 +85,16 @@ Core entities:
 - `ReviewGate`: Human CTO approval point.
 - `LogEvent`: append-only runtime evidence.
 
+## API Contract Boundary
+
+v0.1 uses `api-contract.json` as a compact platform-owned JSON contract. It is
+not a full OpenAPI document. This is sufficient for the current
+ContractChecker, which compares method, path, and request keys between
+Frontend usages and Backend routes.
+
+Full OpenAPI schema generation, validation, and richer AST-level extraction are
+documented production extension points rather than v0.1 deliverables.
+
 ## Agent Orchestration Logic
 
 The implemented flow is:

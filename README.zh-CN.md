@@ -82,6 +82,12 @@ Web UI
 - `ReviewGate`：Human CTO 审核点。
 - `LogEvent`：追加式运行证据。
 
+## API Contract 边界
+
+v0.1 使用 `api-contract.json` 作为平台内部的紧凑 JSON contract，不是完整 OpenAPI 文档。当前 ContractChecker 只需要对比 Frontend usages 和 Backend routes 的 method、path、request keys，因此这个格式足够支撑 MVP 的 API mismatch 检测。
+
+完整 OpenAPI schema 生成、校验，以及更强的 AST 级提取，被明确保留为生产级扩展点，不属于 v0.1 直接交付范围。
+
 ## Agent 编排流程
 
 当前实现的主流程：
